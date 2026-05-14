@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Error_Message__c</fullName>
+    <label>Error Message</label>
+    <description>Error details captured if the migration attempt fails.</description>
+    <type>LongTextArea</type>
+    <length>32768</length>
+    <visibleLines>10</visibleLines>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+</CustomField>

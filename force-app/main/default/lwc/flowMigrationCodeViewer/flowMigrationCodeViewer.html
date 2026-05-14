@@ -1,0 +1,39 @@
+<template>
+    <lightning-card title="Generated Apex" icon-name="standard:apex">
+        <div class="slds-p-around_medium">
+            <template lwc:if={hasCode}>
+                <lightning-tabset>
+                    <lightning-tab label="Trigger">
+                        <div class="slds-m-bottom_x-small">
+                            <lightning-button-icon
+                                icon-name="utility:copy"
+                                alternative-text="Copy"
+                                title="Copy Trigger"
+                                onclick={copyTrigger}>
+                            </lightning-button-icon>
+                            <span class="slds-m-left_x-small slds-text-body_small">Copy</span>
+                        </div>
+                        <pre class="code-block">{triggerCode}</pre>
+                    </lightning-tab>
+                    <lightning-tab label="Handler">
+                        <div class="slds-m-bottom_x-small">
+                            <lightning-button-icon
+                                icon-name="utility:copy"
+                                alternative-text="Copy"
+                                title="Copy Handler"
+                                onclick={copyHandler}>
+                            </lightning-button-icon>
+                            <span class="slds-m-left_x-small slds-text-body_small">Copy</span>
+                        </div>
+                        <pre class="code-block">{handlerCode}</pre>
+                    </lightning-tab>
+                </lightning-tabset>
+            </template>
+            <template lwc:else>
+                <p class="slds-text-body_small slds-text-color_weak">
+                    No generated Apex available for this record yet.
+                </p>
+            </template>
+        </div>
+    </lightning-card>
+</template>

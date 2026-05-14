@@ -1,0 +1,13 @@
+.code-block {
+    background-color: #17384D;
+    color: #d4d4d4;
+    padding: 1rem;
+    border-radius: 0.25rem;
+    font-family: "Menlo", "Monaco", "Courier New", monospace;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre;
+    max-height: 600px;
+    overflow-y: auto;
+}

@@ -1,0 +1,26 @@
+.result {
+    border-radius: 0.25rem;
+}
+
+.result_success {
+    background-color: #f3f9f4;
+    border-left: 4px solid #2e844a;
+}
+
+.result_error {
+    background-color: #fdf3f3;
+    border-left: 4px solid #ba0517;
+}
+.code-block {
+    background-color: #17384D;
+    color: #d4d4d4;
+    padding: 1rem;
+    border-radius: 0.25rem;
+    font-family: "Menlo", "Monaco", "Courier New", monospace;
+    font-size: 0.85rem;
+    line-height: 1.4;
+    overflow-x: auto;
+    white-space: pre;
+    max-height: 500px;
+    overflow-y: auto;
+}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomApplication xmlns="http://soap.sforce.com/2006/04/metadata">
+    <label>Flow to Apex AI</label>
+    <description>AI-powered Flow to Apex conversion tool. Uses Einstein to convert Record-Triggered Flows into bulk-safe Apex.</description>
+    <defaultLandingTab>Flow_Converter</defaultLandingTab>
+    <formFactors>Large</formFactors>
+    <isNavAutoTempTabsDisabled>false</isNavAutoTempTabsDisabled>
+    <isNavPersonalizationDisabled>false</isNavPersonalizationDisabled>
+    <navType>Standard</navType>
+    <tabs>Flow_Converter</tabs>
+    <tabs>FlowMigration__c</tabs>
+    <uiType>Lightning</uiType>
+</CustomApplication>
