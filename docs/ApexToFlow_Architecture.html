@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Apex → Flow Converter — Architecture</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --blue:    #0070d2;
+    --green:   #2e7d32;
+    --orange:  #e65100;
+    --purple:  #6a1b9a;
+    --gray-50: #f8f9fa;
+    --gray-100:#f1f3f5;
+    --gray-200:#e9ecef;
+    --gray-400:#868e96;
+    --gray-700:#495057;
+    --gray-900:#212529;
+    --border:  #dee2e6;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--gray-900);
+    background: #fff;
+    padding: 48px 56px;
+    max-width: 960px;
+    margin: 0 auto;
+  }
+
+  /* ── Cover ─────────────────────────────────────────────── */
+  .cover {
+    border-bottom: 3px solid var(--blue);
+    padding-bottom: 24px;
+    margin-bottom: 36px;
+  }
+  .cover-tag {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 8px;
+  }
+  .cover h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--gray-900);
+    line-height: 1.2;
+    margin-bottom: 10px;
+  }
+  .cover-meta {
+    font-size: 12px;
+    color: var(--gray-400);
+  }
+
+  /* ── Section headings ───────────────────────────────────── */
+  h2 {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--gray-900);
+    margin: 32px 0 14px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+  h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--blue);
+    margin: 20px 0 8px;
+  }
+
+  /* ── Code / diagram blocks ──────────────────────────────── */
+  pre {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-size: 11px;
+    line-height: 1.55;
+    background: var(--gray-50);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 12px 0;
+    white-space: pre;
+  }
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    background: var(--gray-100);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 1px 5px;
+  }
+
+  /* ── Cards ──────────────────────────────────────────────── */
+  .card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 12px 0;
+  }
+  .card-blue   { border-left: 4px solid var(--blue);   background: #f0f7ff; }
+  .card-green  { border-left: 4px solid var(--green);  background: #f1f8f1; }
+  .card-orange { border-left: 4px solid var(--orange); background: #fff8f0; }
+  .card-purple { border-left: 4px solid var(--purple); background: #faf0ff; }
+  .card-label  { font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; margin-bottom: 6px; }
+  .card-blue   .card-label { color: var(--blue); }
+  .card-green  .card-label { color: var(--green); }
+  .card-orange .card-label { color: var(--orange); }
+  .card-purple .card-label { color: var(--purple); }
+
+  /* ── Tables ─────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px; }
+  th { background: var(--gray-100); font-weight: 600; text-align: left; padding: 8px 12px; border: 1px solid var(--border); }
+  td { padding: 7px 12px; border: 1px solid var(--border); vertical-align: top; }
+  tr:nth-child(even) td { background: var(--gray-50); }
+
+  /* ── Lists ──────────────────────────────────────────────── */
+  ul, ol { padding-left: 20px; margin: 8px 0; }
+  li { margin: 4px 0; }
+
+  /* ── Badge ──────────────────────────────────────────────── */
+  .badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 20px;
+    margin-right: 4px;
+  }
+  .badge-pass { background: #e8f5e9; color: #2e7d32; }
+  .badge-fail { background: #fce4ec; color: #b71c1c; }
+
+  /* ── Print ──────────────────────────────────────────────── */
+  @media print {
+    body { padding: 20px 24px; font-size: 12px; }
+    pre  { font-size: 10px; }
+    h2   { page-break-before: auto; }
+    .card, pre, table { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════════════════ COVER ══════════════════════════════ -->
+<div class="cover">
+  <div class="cover-tag">flowToApexAI — Internal Reference</div>
+  <h1>Apex → Flow Converter<br>Architecture &amp; Prompt Design</h1>
+  <div class="cover-meta">
+    Template: <strong>Apex_To_Flow_Converter</strong> &nbsp;·&nbsp;
+    Service: <strong>ApexToFlowService</strong> &nbsp;·&nbsp;
+    Branch: <strong>feature/deployHandler</strong> &nbsp;·&nbsp;
+    Generated: <strong>May 2026</strong>
+  </div>
+</div>
+
+<!-- ══════════════════════════════ 1. END-TO-END FLOW ═════════════════ -->
+<h2>1. End-to-End Request Flow</h2>
+
+<pre>
+┌─────────────────────────────────────────────────────────────────────┐
+│                      LWC: flowToApexConverter                       │
+│   User selects "Apex → Flow", types "AccountSetDefaultIndustry..."  │
+│   Clicks Convert                                                     │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │  migrateApexToFlow({ apexClassName })
+                           │  @AuraEnabled Apex callout
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                   ApexToFlowService.migrate()                        │
+│                                                                     │
+│  ① ApexSourceReaderService.getApexBody(className)                   │
+│     Tooling API → SELECT Body FROM ApexClass WHERE Name = X         │
+│     Returns: raw Apex source string                                  │
+│                                                                     │
+│  ② EinsteinPromptClient.invoke(                                     │
+│       'Apex_To_Flow_Converter',                                      │
+│       { apexSource: rawSource }                                      │
+│     )                                                               │
+│     Einstein loads template from org, injects {!$Input:apexSource}  │
+│     Returns: raw model response string                               │
+│                                                                     │
+│  ③ parseResponse(raw)                                               │
+│     ===STATUS===   →  TRANSLATABLE / NOT_TRANSLATABLE               │
+│     ===OBJECT===   →  "Account"                                     │
+│     ===FLOW_XML=== →  full XML string                               │
+│     ===REASON===   →  refusal message                               │
+│                                                                     │
+│  ④ insert FlowMigration__c                                          │
+│     Direction__c         = 'Apex_To_Flow'                           │
+│     Generated_Flow_XML__c = flowXml   (if translatable)            │
+│     Status__c            = 'Generated' | 'Failed'                  │
+│     Object_Name__c       = objectName                               │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │  MigrationResult returned to LWC
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                          LWC renders                                │
+│   isFlowGenerated  →  Flow XML block + Copy button                  │
+│   isRefused        →  "Not translatable" warning box + reason       │
+│   isFailed         →  error message                                 │
+└─────────────────────────────────────────────────────────────────────┘
+</pre>
+
+<!-- ══════════════════════════════ 2. PROMPT DECISION TREE ═══════════ -->
+<h2>2. Prompt Internal Decision Tree</h2>
+
+<pre>
+INPUT: Apex source code
+         │
+         ▼
+┌──────────────────────────────┐
+│  STEP 1 — Signature check    │  implements IFlowMigrationHandler?
+│                              │  public void run(
+│  public void run(            │    System.TriggerOperation op,
+│    op,                       │    List&lt;SObject&gt; records,
+│    List&lt;SObject&gt; records,    │    Map&lt;Id, SObject&gt; oldMap
+│    Map&lt;Id,SObject&gt; oldMap)   │  )
+└──────┬───────────────────────┘
+  FAIL │  PASS
+       │    ▼
+       │  ┌──────────────────────────────────────────┐
+       │  │  STEP 2 — NOT_TRANSLATABLE pattern scan  │
+       │  │  try/catch · @future · callouts          │
+       │  │  dynamic SOQL · recursion · SOSL         │
+       │  │  Schema.describe · System.enqueueJob ...  │
+       │  └──────┬───────────────────────────────────┘
+       │  MATCH  │  NO MATCH
+       │         ▼
+       │  ┌──────────────────────────────────────────┐
+       │  │  STEP 3 — Object detection               │
+       │  │  Find first cast inside the main loop:   │
+       │  │    Account rec = (Account) sObj;         │
+       │  │  → trigger object = "Account"            │
+       │  └──────┬───────────────────────────────────┘
+       │         ▼
+       │  ┌──────────────────────────────────────────┐
+       │  │  STEP 4 — Op-gate detection              │
+       │  │  if (op != BEFORE_INSERT) return;        │
+       │  │  → triggerType    = RecordBeforeSave     │
+       │  │  → recordTrigger  = Create               │
+       │  └──────┬───────────────────────────────────┘
+       │         ▼
+       │  ┌──────────────────────────────────────────┐
+       │  │  STEP 5 — Element-by-element translation │
+       │  │                                          │
+       │  │  for (sObj : records) body               │
+       │  │    → per-$Record context  (NOT a Loop)   │
+       │  │  if / else  →  Decision element          │
+       │  │  SOQL       →  Get Records               │
+       │  │  insert      →  Create Records           │
+       │  │  update      →  Update Records           │
+       │  │  inner for   →  Loop element             │
+       │  └──────┬───────────────────────────────────┘
+       │         ▼
+       │  ┌──────────────────────────────────────────┐
+       │  │  STEP 6 — 10-point self-check            │
+       │  │  (XML integrity before emit)             │
+       │  └──────┬───────────────────────────────────┘
+       │         ▼
+       │    OUTPUT: ===STATUS=== TRANSLATABLE + Flow XML
+       ▼
+     OUTPUT: ===STATUS=== NOT_TRANSLATABLE + reason
+</pre>
+
+<!-- ══════════════════════════════ 3. TRANSLATION MAP ════════════════ -->
+<h2>3. Apex → Flow Element Translation Map</h2>
+
+<table>
+  <thead>
+    <tr><th>Apex Pattern</th><th>Flow Element</th><th>Notes</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><code>for (SObject sObj : records)</code> — outer loop</td>
+      <td><em>Per-record context ($Record)</em></td>
+      <td>Not a Loop element. Body translates directly to $Record operations.</td>
+    </tr>
+    <tr>
+      <td><code>for (X item : someCollection)</code> — inner loop</td>
+      <td><strong>loops</strong> element</td>
+      <td>Gets Records output → Loop → elements inside iterate over collection.</td>
+    </tr>
+    <tr>
+      <td><code>record.FieldName = value</code></td>
+      <td><strong>assignments</strong> element</td>
+      <td><code>assignToReference</code> = <code>$Record.FieldName</code></td>
+    </tr>
+    <tr>
+      <td><code>if / else if / else</code></td>
+      <td><strong>decisions</strong> element</td>
+      <td>One <code>&lt;rules&gt;</code> per branch, <code>&lt;defaultConnector&gt;</code> for else.</td>
+    </tr>
+    <tr>
+      <td><code>List&lt;X&gt; xs = [SELECT … FROM X …]</code></td>
+      <td><strong>recordLookups</strong> (Get Records)</td>
+      <td>Filter conditions map from WHERE clause.</td>
+    </tr>
+    <tr>
+      <td><code>insert ref</code></td>
+      <td><strong>recordCreates</strong> (Create Records)</td>
+      <td>Collected outside loop, single DML.</td>
+    </tr>
+    <tr>
+      <td><code>update ref</code></td>
+      <td><strong>recordUpdates</strong> (Update Records)</td>
+      <td>Collected outside loop, single DML.</td>
+    </tr>
+    <tr>
+      <td><code>delete ref</code></td>
+      <td><strong>recordDeletes</strong> (Delete Records)</td>
+      <td>Collected outside loop, single DML.</td>
+    </tr>
+    <tr>
+      <td><code>(&lt;Object&gt;) oldMap.get(record.Id)</code></td>
+      <td><code>$Record__Prior</code></td>
+      <td>Only valid in update/createAndUpdate contexts.</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ══════════════════════════════ 4. OP-GATE MAP ════════════════════ -->
+<h2>4. Op-Gate → Flow Trigger Type Mapping</h2>
+
+<table>
+  <thead>
+    <tr><th>Apex op-gate</th><th>triggerType</th><th>recordTriggerType</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>op != BEFORE_INSERT</code></td><td>RecordBeforeSave</td><td>Create</td></tr>
+    <tr><td><code>op != BEFORE_UPDATE</code></td><td>RecordBeforeSave</td><td>Update</td></tr>
+    <tr><td><code>op != BEFORE_INSERT &amp;&amp; op != BEFORE_UPDATE</code></td><td>RecordBeforeSave</td><td>CreateAndUpdate</td></tr>
+    <tr><td><code>op != AFTER_INSERT</code></td><td>RecordAfterSave</td><td>Create</td></tr>
+    <tr><td><code>op != AFTER_UPDATE</code></td><td>RecordAfterSave</td><td>Update</td></tr>
+    <tr><td><code>op != AFTER_INSERT &amp;&amp; op != AFTER_UPDATE</code></td><td>RecordAfterSave</td><td>CreateAndUpdate</td></tr>
+    <tr><td><em>Any BEFORE + AFTER mix</em></td><td colspan="2"><span class="badge badge-fail">NOT_TRANSLATABLE</span> Flow allows only one timing.</td></tr>
+  </tbody>
+</table>
+
+<!-- ══════════════════════════════ 5. PATTERN LISTS ═════════════════ -->
+<h2>5. Pattern Classification</h2>
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:8px;">
+
+  <div class="card card-orange">
+    <div class="card-label">Must Refuse — NOT_TRANSLATABLE</div>
+    <ul>
+      <li><code>try / catch</code> blocks</li>
+      <li>Dynamic SOQL (<code>Database.query</code>)</li>
+      <li><code>@future</code>, Queueable, Schedulable, Batch</li>
+      <li>Recursive method calls</li>
+      <li>HTTP callouts (<code>HttpRequest</code>)</li>
+      <li>Custom exception classes</li>
+      <li>Anonymous inner classes</li>
+      <li>Complex string parsing / regex</li>
+      <li><code>Map&lt;non-Id, V&gt;</code> used as lookup table</li>
+      <li><code>Set&lt;non-Id&gt;</code> de-duplication</li>
+      <li>Multi-SObject DML in same branch</li>
+      <li>Nested loops with shared accumulators</li>
+      <li>SOSL (<code>FIND … RETURNING</code>)</li>
+      <li><code>Schema.getGlobalDescribe</code></li>
+      <li><code>System.enqueueJob / schedule</code></li>
+    </ul>
+  </div>
+
+  <div class="card card-green">
+    <div class="card-label">Always Translatable — Never Refuse</div>
+    <ul>
+      <li><code>Map&lt;Id, SObject&gt;</code> as bulk-DML collector<br><em>(loop fills → single update outside)</em></li>
+      <li><code>Set&lt;Id&gt;</code> for SOQL <code>WHERE Id IN :ids</code></li>
+      <li><code>if / else if / else</code> chains (any depth)</li>
+      <li><code>for (SObject sObj : soqlResult)</code> loops</li>
+      <li><code>record.FieldName = value</code> assignments</li>
+      <li><code>oldMap.get(record.Id)</code> comparisons</li>
+    </ul>
+  </div>
+
+</div>
+
+<!-- ══════════════════════════════ 6. DESIGN DECISIONS ══════════════ -->
+<h2>6. Key Design Decisions</h2>
+
+<div class="card card-blue" style="margin-bottom:12px;">
+  <div class="card-label">Why List&lt;SObject&gt; + cast instead of List&lt;Account&gt;?</div>
+  <p>The interface <code>IFlowMigrationHandler</code> requires a generic signature. The trigger object is identified from the cast inside the loop body: <code>Account record = (Account) sObj</code>. The cast line <em>is</em> the type declaration — the prompt looks one level deeper than before.</p>
+</div>
+
+<div class="card card-blue" style="margin-bottom:12px;">
+  <div class="card-label">Why does ===STATUS=== come first in the output?</div>
+  <p>The parser uses <code>indexOf()</code>, not line order. But having STATUS first puts the model in a "decision made, fill in the details" mode — this empirically reduces hallucinated XML when the correct answer is NOT_TRANSLATABLE.</p>
+</div>
+
+<div class="card card-blue" style="margin-bottom:12px;">
+  <div class="card-label">Why an explicit "ARE translatable" whitelist?</div>
+  <p>Without it, the model refuses <code>Map&lt;Id, SObject&gt;</code> bulk-collectors and <code>Set&lt;Id&gt;</code> patterns because they look "complex." The whitelist prevents false negatives on patterns that round-trip cleanly between Apex and Flow.</p>
+</div>
+
+<div class="card card-blue">
+  <div class="card-label">Why is mixing BEFORE + AFTER a hard refusal?</div>
+  <p>Flow's <code>triggerType</code> accepts exactly one value — before-save <em>or</em> after-save, never both. Apex can gate on <code>BEFORE_INSERT + AFTER_UPDATE</code> legitimately, but there is no valid Flow representation — refusing is the only honest answer.</p>
+</div>
+
+<!-- ══════════════════════════════ 7. RESPONSE PARSING ══════════════ -->
+<h2>7. Response Parsing — ApexToFlowService</h2>
+
+<pre>
+raw model response
+│
+├── section("===STATUS===", terminators=[OBJECT, FLOW_XML, REASON])
+│     → "TRANSLATABLE" or "NOT_TRANSLATABLE"
+│
+├── section("===OBJECT===", terminators=[FLOW_XML, REASON])
+│     → "Account" (stored in FlowMigration__c.Object_Name__c)
+│
+├── section("===FLOW_XML===", terminators=[REASON])
+│     → full XML string (stored in Generated_Flow_XML__c, max 131 072 chars)
+│
+└── section("===REASON===", terminators=[])
+      → refusal text (stored in Error_Message__c)
+
+Decision logic:
+  isTranslatable = STATUS contains "TRANSLATABLE" AND NOT "NOT_TRANSLATABLE"
+
+  if isTranslatable &amp;&amp; xml present  →  Status__c = 'Generated',  flowXml saved
+  if !isTranslatable &amp;&amp; reason present →  Status__c = 'Failed',    reason saved
+  if xml present but STATUS unclear  →  accept xml (fallback)
+  else                               →  throw EinsteinClientException
+</pre>
+
+<!-- ══════════════════════════════ 8. FLOW XML SKELETON ══════════════ -->
+<h2>8. Required Flow XML Shape</h2>
+
+<pre>
+&lt;?xml version="1.0" encoding="UTF-8"?&gt;
+&lt;Flow xmlns="http://soap.sforce.com/2006/04/metadata"&gt;
+    &lt;apiVersion&gt;59.0&lt;/apiVersion&gt;
+    &lt;label&gt;{FlowLabel}&lt;/label&gt;
+    &lt;interviewLabel&gt;{FlowLabel} {!$Flow.CurrentDateTime}&lt;/interviewLabel&gt;
+    &lt;processType&gt;AutoLaunchedFlow&lt;/processType&gt;
+    &lt;runInMode&gt;DefaultMode&lt;/runInMode&gt;
+    &lt;status&gt;Active&lt;/status&gt;
+    &lt;start&gt;
+        &lt;locationX&gt;50&lt;/locationX&gt;
+        &lt;locationY&gt;0&lt;/locationY&gt;
+        &lt;connector&gt;&lt;targetReference&gt;{firstElement}&lt;/targetReference&gt;&lt;/connector&gt;
+        &lt;object&gt;{SObject}&lt;/object&gt;
+        &lt;recordTriggerType&gt;Create&lt;/recordTriggerType&gt;
+        &lt;triggerType&gt;RecordBeforeSave&lt;/triggerType&gt;
+    &lt;/start&gt;
+    &lt;!-- elements: decisions · assignments · recordLookups
+                   recordCreates · recordUpdates · recordDeletes · loops --&gt;
+&lt;/Flow&gt;
+
+Layout: locationX=50 fixed, locationY starts at 0.
+        Each subsequent element: locationY += 150.
+        Decision branches: locationX ± 200.
+</pre>
+
+<!-- ══════════════════════════════ FOOTER ════════════════════════════ -->
+<div style="margin-top:48px; padding-top:16px; border-top:1px solid var(--border); font-size:11px; color:var(--gray-400); display:flex; justify-content:space-between;">
+  <span>flowToApexAI &nbsp;·&nbsp; feature/deployHandler</span>
+  <span>To save as PDF: Cmd+P → Save as PDF</span>
+</div>
+
+</body>
+</html>

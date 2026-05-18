@@ -69,11 +69,25 @@
                             </div>
                             <pre class="code-block">{result.handlerCode}</pre>
 
-                            <template lwc:if={result.dispatcherHint}>
-                                <p class="slds-m-top_small slds-text-body_small">
-                                    Add this line to <strong>{result.objectName}TriggerDispatcher.dispatch()</strong>:
-                                </p>
-                                <pre class="code-block code-block_small">{result.dispatcherHint}</pre>
+                            <template lwc:if={isDeployed}>
+                                <div class="slds-m-top_small slds-grid slds-grid_vertical-align-center">
+                                    <lightning-icon icon-name="utility:check" variant="success" size="x-small"></lightning-icon>
+                                    <span class="slds-m-left_x-small slds-text-body_small">
+                                        Deployed &amp; registered in Trigger_Handler__mdt — active on next trigger fire.
+                                    </span>
+                                </div>
+                            </template>
+
+                            <template lwc:if={isDeployFailed}>
+                                <div class="slds-m-top_small slds-grid slds-grid_vertical-align-center">
+                                    <lightning-icon icon-name="utility:warning" variant="warning" size="x-small"></lightning-icon>
+                                    <span class="slds-m-left_x-small slds-text-body_small">
+                                        Auto-deploy failed — copy the handler above and deploy manually.
+                                    </span>
+                                </div>
+                                <template lwc:if={result.deployError}>
+                                    <p class="slds-text-body_small slds-text-color_error slds-m-top_x-small">{result.deployError}</p>
+                                </template>
                             </template>
 
                             <lightning-button label="Open Migration Record" variant="neutral"

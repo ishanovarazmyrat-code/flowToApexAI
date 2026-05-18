@@ -4,6 +4,20 @@ import { ShowToastEvent } from 'lightning/platformShowToastEvent';
 import migrateFlowToApex from '@salesforce/apex/FlowToApexService.migrate';
 import migrateApexToFlow from '@salesforce/apex/ApexToFlowService.migrate';
 
+function extractErrorMessage(error) {
+    if (!error) return 'Unknown error';
+    const body = error.body;
+    if (body) {
+        if (typeof body === 'string') return body;
+        if (body.message) return body.message;
+        if (Array.isArray(body) && body[0] && body[0].message) return body[0].message;
+        if (body.output && body.output.errors && body.output.errors[0]) {
+            return body.output.errors[0].message;
+        }
+    }
+    return error.message || JSON.stringify(error);
+}
+
 const DIR_FLOW_TO_APEX = 'flowToApex';
 const DIR_APEX_TO_FLOW = 'apexToFlow';
 
@@ -50,6 +64,12 @@ export default class FlowToApexConverter extends NavigationMixin(LightningElemen
             ? ` for ${this.result.objectName}`
             : '';
     }
+    get isDeployed() {
+        return this.result && this.result.deployStatus === 'Deployed';
+    }
+    get isDeployFailed() {
+        return this.result && this.result.deployStatus === 'Deploy_Failed';
+    }
 
     handleDirectionChange(e) {
         this.direction = e.detail.value;
@@ -68,11 +88,11 @@ export default class FlowToApexConverter extends NavigationMixin(LightningElemen
                 ? await migrateFlowToApex({ flowApiName: name })
                 : await migrateApexToFlow({ apexClassName: name });
         } catch (error) {
+            // eslint-disable-next-line no-console
+            console.error('Conversion error:', JSON.stringify(error));
             this.result = {
                 status:       'Failed',
-                errorMessage: (error && error.body && error.body.message)
-                                || (error && error.message)
-                                || 'Unknown error',
+                errorMessage: extractErrorMessage(error),
                 migrationId:  null
             };
         } finally {

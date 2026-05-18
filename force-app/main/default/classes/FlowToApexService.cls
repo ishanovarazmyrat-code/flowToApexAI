@@ -2,13 +2,11 @@
  * @description Orchestrates a Flow→Apex conversion end-to-end:
  *              1. Reads the source Flow metadata via the Tooling API.
  *              2. Sends it to the Flow_To_Apex_Converter Prompt Template.
- *              3. Parses the handler class (and optional object name) from the
- *                 model response and persists everything into FlowMigration__c.
- *
- *              Output is HANDLER-ONLY. The triggering itself is handled by a
- *              single per-object Trigger + Dispatcher pattern (see the
- *              AccountTrigger + AccountTriggerDispatcher template). Users add
- *              one line to the dispatcher to register each new handler.
+ *              3. Parses the handler class from the model response.
+ *              4. Deploys the handler Apex class via the Tooling API (synchronous callout).
+ *              5. Registers it in Trigger_Handler__mdt so the CMT-based dispatcher picks it up
+ *                 automatically — no manual dispatcher edits required.
+ *              6. Persists everything into FlowMigration__c.
  */
 public with sharing class FlowToApexService {
 
@@ -16,12 +14,14 @@ public with sharing class FlowToApexService {
 
     public class MigrationResult {
         @AuraEnabled public Id     migrationId;
-        @AuraEnabled public String status;        // 'Generated' | 'Failed'
+        @AuraEnabled public String status;         // 'Generated' | 'Failed'
         @AuraEnabled public String errorMessage;
         @AuraEnabled public String flowName;
         @AuraEnabled public String objectName;
         @AuraEnabled public String handlerCode;
-        @AuraEnabled public String dispatcherHint; // e.g. "MyHandler.run(op, records, oldMap);"
+        @AuraEnabled public String dispatcherHint; // kept for backwards-compat / display
+        @AuraEnabled public String deployStatus;   // 'Deployed' | 'Deploy_Failed' | 'Not_Attempted'
+        @AuraEnabled public String deployError;
     }
 
     @AuraEnabled
@@ -42,7 +42,7 @@ public with sharing class FlowToApexService {
         );
 
         try {
-            // Callouts FIRST — all of them — before any DML.
+            // ── Step 1-2: All callouts BEFORE any DML ──────────────────────
             String flowMetadataJson = FlowReaderService.getFlowMetadata(flowApiName);
             String raw = EinsteinPromptClient.invoke(
                 TEMPLATE_API_NAME,
@@ -50,19 +50,50 @@ public with sharing class FlowToApexService {
             );
 
             Parsed p = parseResponse(raw);
-            rec.Object_Name__c   = p.objectName;
-            rec.Generated_Apex__c = truncate(
-                p.handlerCode + buildDispatcherFooter(p),
-                131072
-            );
-            rec.Status__c = 'Generated';
+            rec.Object_Name__c    = p.objectName;
+            rec.Generated_Apex__c = truncate(p.handlerCode, 131072);
+            rec.Status__c         = 'Generated';
+
+            // ── Step 3: Deploy handler class (callout — still before DML) ──
+            ApexDeployService.DeployResult deployResult = null;
+            if (String.isNotBlank(p.className) && String.isNotBlank(p.handlerCode)) {
+                deployResult = ApexDeployService.deployApexClass(p.className, p.handlerCode);
+            }
+
+            String deployStatus = deployResult == null     ? 'Not_Attempted'
+                                : deployResult.success     ? 'Deployed'
+                                                           : 'Deploy_Failed';
+            rec.Deploy_Status__c = deployStatus;
+
+            // ── Step 4: DML ─────────────────────────────────────────────────
             insert rec;
+
+            // ── Step 5: Register in CMT (after DML — not a callout) ─────────
+            // Isolated try/catch: a CMT deploy failure must never roll back the
+            // already-inserted FlowMigration__c record or produce an unhandled exception.
+            if (deployResult != null && deployResult.success
+                    && String.isNotBlank(p.objectName) && String.isNotBlank(p.className)) {
+                try {
+                    ApexDeployService.registerHandlerAsync(p.objectName, p.className);
+                } catch (Exception cmtEx) {
+                    // Non-fatal: class is deployed; dispatcher registration will need
+                    // to be done manually or retried. Surface the error but keep status=Generated.
+                    deployStatus         = 'Deploy_Failed';
+                    rec.Deploy_Status__c = deployStatus;
+                    update rec;
+                    out.deployError = 'CMT registration failed: ' + cmtEx.getMessage();
+                }
+            }
 
             out.migrationId    = rec.Id;
             out.status         = 'Generated';
             out.objectName     = p.objectName;
             out.handlerCode    = p.handlerCode;
             out.dispatcherHint = p.dispatcherHint;
+            out.deployStatus   = deployStatus;
+            if (deployResult != null && !deployResult.success && out.deployError == null) {
+                out.deployError = deployResult.errorMessage;
+            }
             return out;
 
         } catch (Exception e) {
@@ -70,7 +101,13 @@ public with sharing class FlowToApexService {
             rec.Error_Message__c = truncate(
                 e.getMessage() + '\n\n' + e.getStackTraceString(), 32768
             );
-            insert rec;
+            // rec.Id is null here (DML not yet run) so insert is always safe.
+            // If somehow Id is already set (should not happen), fall back to update.
+            if (rec.Id == null) {
+                insert rec;
+            } else {
+                update rec;
+            }
             out.migrationId  = rec.Id;
             out.status       = 'Failed';
             out.errorMessage = e.getMessage();
@@ -78,24 +115,25 @@ public with sharing class FlowToApexService {
         }
     }
 
-    // ----- parsing -----
+    // -------------------------------------------------------------------------
+    // Parsing
+    // -------------------------------------------------------------------------
 
     private class Parsed {
         String objectName;
+        String className;      // extracted from the class declaration
         String handlerCode;
         String dispatcherHint;
     }
 
     /**
-     * Parses the model response. Expected format (markers from the prompt):
+     * Expected format (markers from the prompt):
      *   ===OBJECT===
      *   Account
      *   ===HANDLER===
-     *   public with sharing class ... { ... }
+     *   public with sharing class AccountFooHandler implements IFlowMigrationHandler { ... }
      *   ===DISPATCHER===
-     *   AccountFooHandler.run(op, records, oldMap);
-     *
-     * The OBJECT and DISPATCHER sections are optional; HANDLER is required.
+     *   AccountFooHandler.run(op, records, oldMap);  (kept for UI display only)
      */
     private static Parsed parseResponse(String raw) {
         if (String.isBlank(raw)) {
@@ -104,9 +142,8 @@ public with sharing class FlowToApexService {
         Parsed p = new Parsed();
         p.objectName     = extractBetween(raw, '===OBJECT===',     '===HANDLER===');
         p.handlerCode    = extractBetween(raw, '===HANDLER===',    '===DISPATCHER===');
-        p.dispatcherHint = extractAfter(raw, '===DISPATCHER===');
+        p.dispatcherHint = extractAfter(raw,   '===DISPATCHER===');
 
-        // Fallback: if the model produced only HANDLER without other markers
         if (String.isBlank(p.handlerCode)) {
             Integer h = raw.indexOf('===HANDLER===');
             if (h >= 0) {
@@ -118,7 +155,15 @@ public with sharing class FlowToApexService {
                 );
             }
         }
+
+        p.className = extractClassName(p.handlerCode);
         return p;
+    }
+
+    private static String extractClassName(String apexBody) {
+        if (String.isBlank(apexBody)) return null;
+        Matcher m = Pattern.compile('(?i)\\bclass\\s+(\\w+)').matcher(apexBody);
+        return m.find() ? m.group(1) : null;
     }
 
     private static String extractBetween(String raw, String startMarker, String endMarker) {
@@ -133,16 +178,6 @@ public with sharing class FlowToApexService {
         Integer i = raw.indexOf(marker);
         if (i < 0) return null;
         return raw.substring(i + marker.length()).trim();
-    }
-
-    private static String buildDispatcherFooter(Parsed p) {
-        if (String.isBlank(p.dispatcherHint)) return '';
-        return '\n\n/*\n' +
-            ' * Register this handler by adding the following line inside\n' +
-            ' * the dispatcher\'s dispatch() method:\n' +
-            ' *\n' +
-            ' *   ' + p.dispatcherHint + '\n' +
-            ' */';
     }
 
     private static String truncate(String value, Integer maxLen) {
