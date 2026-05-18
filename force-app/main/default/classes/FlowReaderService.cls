@@ -1,15 +1,8 @@
 /**
- * @description Reads Salesforce Flow metadata via the Tooling API and returns
- *              it as a cleaned-up JSON string ready for LLM consumption.
- *              
- * @usage       String json = FlowReaderService.getFlowMetadata('Account_Set_Default_Industry');
- *
- * @prerequisite
- *   - Remote Site Setting pointing at the org's My Domain URL.
- *   - Visualforce page 'SessionIdPage' deployed (used in Lightning/LWC context
- *     where UserInfo.getSessionId() returns a non-REST-API Lightning session).
+ * @description Reads Salesforce Flow metadata via the Tooling API.
+ *              Returns a pruned JSON string (empty arrays, nulls, and Salesforce
+ *              internal metadata removed) suitable for sending to an LLM.
  */
-
 public with sharing class FlowReaderService {
 
     private static final String API_VERSION = 'v59.0';
@@ -26,7 +19,8 @@ public with sharing class FlowReaderService {
     }
 
     private static String findActiveVersionId(String flowApiName) {
-        String soql = 'SELECT Id, DeveloperName, ActiveVersionId FROM FlowDefinition WHERE DeveloperName = \'' + String.escapeSingleQuotes(flowApiName) + '\'';
+        String soql = 'SELECT Id, DeveloperName, ActiveVersionId FROM FlowDefinition WHERE DeveloperName = \'' +
+            String.escapeSingleQuotes(flowApiName) + '\'';
         Map<String, Object> response = executeToolingQuery(soql);
         List<Object> records = (List<Object>) response.get('records');
         if (records == null || records.isEmpty()) {
@@ -35,7 +29,9 @@ public with sharing class FlowReaderService {
         Map<String, Object> def = (Map<String, Object>) records[0];
         String activeId = (String) def.get('ActiveVersionId');
         if (String.isBlank(activeId)) {
-            throw new FlowReaderException('Flow has no active version. Activate the Flow before migrating: ' + flowApiName);
+            throw new FlowReaderException(
+                'Flow has no active version. Activate the Flow before migrating: ' + flowApiName
+            );
         }
         return activeId;
     }
@@ -72,16 +68,13 @@ public with sharing class FlowReaderService {
     }
 
     private static String getValidSessionId() {
-        if (Test.isRunningTest()) {
-            return UserInfo.getSessionId();
-        }
+        if (Test.isRunningTest()) return UserInfo.getSessionId();
         try {
             return Page.SessionIdPage.getContent().toString().trim();
         } catch (Exception e) {
             return UserInfo.getSessionId();
         }
     }
-
 
     private static final Set<String> IGNORED_KEYS = new Set<String>{
         'processMetadataValues', 'attributes', 'segment', 'form',

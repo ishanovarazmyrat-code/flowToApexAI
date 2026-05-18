@@ -10,7 +10,7 @@
     </nameField>
     <deploymentStatus>Deployed</deploymentStatus>
     <sharingModel>ReadWrite</sharingModel>
-    <description>Records of Flow-to-Apex conversion attempts and their AI-generated results.</description>
+    <description>Records of Flow ↔ Apex conversion attempts and their AI-generated results.</description>
     <enableActivities>false</enableActivities>
     <enableBulkApi>true</enableBulkApi>
     <enableHistory>false</enableHistory>

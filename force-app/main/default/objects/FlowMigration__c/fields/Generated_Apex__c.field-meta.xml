@@ -2,7 +2,7 @@
 <CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
     <fullName>Generated_Apex__c</fullName>
     <label>Generated Apex</label>
-    <description>Apex Trigger and Handler code produced by Einstein for the source Flow.</description>
+    <description>Handler class produced by Einstein for a Flow→Apex migration. Used together with a Trigger Dispatcher pattern.</description>
     <type>LongTextArea</type>
     <length>131072</length>
     <visibleLines>40</visibleLines>

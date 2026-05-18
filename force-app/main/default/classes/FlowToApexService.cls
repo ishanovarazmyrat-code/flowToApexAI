@@ -1,90 +1,153 @@
 /**
- * @description Orchestrates a Flow-to-Apex conversion end-to-end:
+ * @description Orchestrates a Flow→Apex conversion end-to-end:
  *              1. Reads the source Flow metadata via the Tooling API.
  *              2. Sends it to the Flow_To_Apex_Converter Prompt Template.
- *              3. Persists the source XML and generated Apex into a new
- *                 FlowMigration__c record.
+ *              3. Parses the handler class (and optional object name) from the
+ *                 model response and persists everything into FlowMigration__c.
  *
- *              This is the @AuraEnabled entry point called by the LWC.
+ *              Output is HANDLER-ONLY. The triggering itself is handled by a
+ *              single per-object Trigger + Dispatcher pattern (see the
+ *              AccountTrigger + AccountTriggerDispatcher template). Users add
+ *              one line to the dispatcher to register each new handler.
  */
 public with sharing class FlowToApexService {
 
-    /** @AuraEnabled-friendly result object returned to the LWC. */
-    public class MigrationResult {
-        @AuraEnabled public Id      migrationId;
-        @AuraEnabled public String  status;       // 'Generated' | 'Failed'
-        @AuraEnabled public String  errorMessage; // populated when status = Failed
-        @AuraEnabled public String  flowName;
-        @AuraEnabled public String triggerCode;   
-        @AuraEnabled public String handlerCode;
+    private static final String TEMPLATE_API_NAME = 'Flow_To_Apex_Converter';
 
+    public class MigrationResult {
+        @AuraEnabled public Id     migrationId;
+        @AuraEnabled public String status;        // 'Generated' | 'Failed'
+        @AuraEnabled public String errorMessage;
+        @AuraEnabled public String flowName;
+        @AuraEnabled public String objectName;
+        @AuraEnabled public String handlerCode;
+        @AuraEnabled public String dispatcherHint; // e.g. "MyHandler.run(op, records, oldMap);"
     }
 
     @AuraEnabled
     public static MigrationResult migrate(String flowApiName) {
-        MigrationResult result = new MigrationResult();
-        result.flowName = flowApiName;
+        MigrationResult out = new MigrationResult();
+        out.flowName = flowApiName;
 
         if (String.isBlank(flowApiName)) {
-            result.status = 'Failed';
-            result.errorMessage = 'Flow API name is required.';
-            return result;
+            out.status = 'Failed';
+            out.errorMessage = 'Flow API name is required.';
+            return out;
         }
 
-        // IMPORTANT: All HTTP callouts (Tooling API + Einstein) MUST run before any DML
-        //            in the same transaction. We build the FlowMigration__c record in
-        //            memory and insert it once at the end (success or failure path).
-        FlowMigration__c migration = new FlowMigration__c(
+        FlowMigration__c rec = new FlowMigration__c(
             Source_Flow_Name__c = flowApiName,
+            Direction__c        = 'Flow_To_Apex',
             Status__c           = 'New'
         );
 
         try {
-            // Step 1: read Flow metadata via Tooling API (callout #1)
+            // Callouts FIRST — all of them — before any DML.
             String flowMetadataJson = FlowReaderService.getFlowMetadata(flowApiName);
-            
+            String raw = EinsteinPromptClient.invoke(
+                TEMPLATE_API_NAME,
+                new Map<String, String>{ 'flowMetadata' => flowMetadataJson }
+            );
 
-            // Step 2: call Einstein with the Flow metadata (callout #2)
-            EinsteinPromptClient.GeneratedApex generated =
-                EinsteinPromptClient.generate(flowMetadataJson);
+            Parsed p = parseResponse(raw);
+            rec.Object_Name__c   = p.objectName;
+            rec.Generated_Apex__c = truncate(
+                p.handlerCode + buildDispatcherFooter(p),
+                131072
+            );
+            rec.Status__c = 'Generated';
+            insert rec;
 
-            String combined =
-                '// ===== TRIGGER =====\n' +
-                generated.triggerCode +
-                '\n\n// ===== HANDLER =====\n' +
-                generated.handlerCode;
-
-            migration.Generated_Apex__c = truncateForField(combined, 131072);
-            migration.Status__c         = 'Generated';
-
-            // All callouts complete — single DML at the very end.
-            insert migration;
-            result.migrationId = migration.Id;
-            result.triggerCode = generated.triggerCode;
-            result.handlerCode = generated.handlerCode;
-            result.status      = 'Generated';
-            return result;
+            out.migrationId    = rec.Id;
+            out.status         = 'Generated';
+            out.objectName     = p.objectName;
+            out.handlerCode    = p.handlerCode;
+            out.dispatcherHint = p.dispatcherHint;
+            return out;
 
         } catch (Exception e) {
-            // Capture the failure on the same in-memory record, then insert once.
-            migration.Status__c        = 'Failed';
-            migration.Error_Message__c = truncateForField(
-                e.getMessage() + '\n\n' + e.getStackTraceString(),
-                32768
+            rec.Status__c        = 'Failed';
+            rec.Error_Message__c = truncate(
+                e.getMessage() + '\n\n' + e.getStackTraceString(), 32768
             );
-            insert migration;
-
-            result.migrationId  = migration.Id;
-            result.status       = 'Failed';
-            result.errorMessage = e.getMessage();
-            return result;
+            insert rec;
+            out.migrationId  = rec.Id;
+            out.status       = 'Failed';
+            out.errorMessage = e.getMessage();
+            return out;
         }
     }
 
-    /** Truncate a string to the field's max length, leaving room for an ellipsis. */
-    private static String truncateForField(String value, Integer maxLength) {
+    // ----- parsing -----
+
+    private class Parsed {
+        String objectName;
+        String handlerCode;
+        String dispatcherHint;
+    }
+
+    /**
+     * Parses the model response. Expected format (markers from the prompt):
+     *   ===OBJECT===
+     *   Account
+     *   ===HANDLER===
+     *   public with sharing class ... { ... }
+     *   ===DISPATCHER===
+     *   AccountFooHandler.run(op, records, oldMap);
+     *
+     * The OBJECT and DISPATCHER sections are optional; HANDLER is required.
+     */
+    private static Parsed parseResponse(String raw) {
+        if (String.isBlank(raw)) {
+            throw new EinsteinPromptClient.EinsteinClientException('Empty model response.');
+        }
+        Parsed p = new Parsed();
+        p.objectName     = extractBetween(raw, '===OBJECT===',     '===HANDLER===');
+        p.handlerCode    = extractBetween(raw, '===HANDLER===',    '===DISPATCHER===');
+        p.dispatcherHint = extractAfter(raw, '===DISPATCHER===');
+
+        // Fallback: if the model produced only HANDLER without other markers
+        if (String.isBlank(p.handlerCode)) {
+            Integer h = raw.indexOf('===HANDLER===');
+            if (h >= 0) {
+                p.handlerCode = raw.substring(h + '===HANDLER==='.length()).trim();
+            } else {
+                throw new EinsteinPromptClient.EinsteinClientException(
+                    'Model response missing ===HANDLER=== marker. First 500 chars: ' +
+                    raw.substring(0, Math.min(500, raw.length()))
+                );
+            }
+        }
+        return p;
+    }
+
+    private static String extractBetween(String raw, String startMarker, String endMarker) {
+        Integer a = raw.indexOf(startMarker);
+        if (a < 0) return null;
+        Integer b = raw.indexOf(endMarker, a + startMarker.length());
+        if (b < 0) return null;
+        return raw.substring(a + startMarker.length(), b).trim();
+    }
+
+    private static String extractAfter(String raw, String marker) {
+        Integer i = raw.indexOf(marker);
+        if (i < 0) return null;
+        return raw.substring(i + marker.length()).trim();
+    }
+
+    private static String buildDispatcherFooter(Parsed p) {
+        if (String.isBlank(p.dispatcherHint)) return '';
+        return '\n\n/*\n' +
+            ' * Register this handler by adding the following line inside\n' +
+            ' * the dispatcher\'s dispatch() method:\n' +
+            ' *\n' +
+            ' *   ' + p.dispatcherHint + '\n' +
+            ' */';
+    }
+
+    private static String truncate(String value, Integer maxLen) {
         if (value == null) return null;
-        if (value.length() <= maxLength) return value;
-        return value.substring(0, maxLength - 25) + '\n\n...[truncated]';
+        if (value.length() <= maxLen) return value;
+        return value.substring(0, maxLen - 25) + '\n\n...[truncated]';
     }
 }

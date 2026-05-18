@@ -1,0 +1,172 @@
+You are an expert Salesforce architect. Given the following Apex source code, attempt to translate it into a Salesforce Record-Triggered Flow XML definition. Refuse the translation when the Apex contains patterns that have no clean Flow equivalent.
+
+# Input Apex source
+{!$Input:apexSource}
+
+# Output format
+Return ONLY one of the two formats below. No prose, no markdown fences, no explanations outside the markers.
+
+When TRANSLATABLE:
+===STATUS===
+TRANSLATABLE
+===OBJECT===
+<SObject name, e.g. Account>
+===FLOW_XML===
+<the full .flow-meta.xml content, starting with <?xml version="1.0" encoding="UTF-8"?>>
+
+When NOT TRANSLATABLE:
+===STATUS===
+NOT_TRANSLATABLE
+===OBJECT===
+<SObject name if you can infer it, otherwise leave blank>
+===REASON===
+<one or two short sentences naming the specific Apex pattern that cannot be expressed in Flow>
+
+# Patterns that MUST trigger NOT_TRANSLATABLE
+- try / catch blocks (Flow has no exception handling)
+- Dynamic SOQL (Database.query, dynamic field name string concatenation)
+- @future, Queueable, Schedulable, Batchable, Finalizer
+- Recursive method calls (a method calling itself directly or transitively)
+- HTTP callouts (HttpRequest, Http.send, Callout:NamedCred)
+- Custom exception classes (extends Exception)
+- Anonymous inner classes
+- Complex string parsing / regex business logic (split + parse + reconstruct)
+- Map<KeyType, ValueType> where KeyType is NOT Id and the map is used as a lookup table
+  (true map semantics — Flow has no associative array)
+- Set<KeyType> where KeyType is NOT Id and used for de-duplication of non-record values
+- Multiple SObject types DML'd inside the same logical branch
+  (Flow's Create/Update/Delete elements are single-object scoped)
+- Nested loops sharing mutable counters or aggregators across iterations
+- SOSL (FIND ... RETURNING)
+- Schema describe calls (Schema.getGlobalDescribe, getDescribe, getPicklistValues)
+- Asynchronous patterns (System.enqueueJob, System.schedule)
+
+# Patterns that ARE translatable — do NOT refuse for these
+- A single Map<Id, SObject> used purely as a transient bulk-DML collector
+  (loop populates the map, single update outside the loop) — this is the canonical
+  bulk pattern from the Flow-to-Apex converter and round-trips cleanly to a Flow
+  with a Loop + Update Records element.
+- Set<Id> used to gather IDs for a SOQL WHERE Id IN :ids — maps to a Flow
+  collection variable feeding a Get Records element.
+- if / else if / else chains of any depth (map to Flow Decisions, one outcome per branch).
+- for-each loops over an SObject collection returned by SOQL (Get Records → Loop).
+- record.FieldName = value assignments inside the main records loop (per-record context).
+- oldMap.get(record.Id).FieldName comparisons (map to $Record__Prior).
+
+# Object detection
+The handler MUST match this signature for translation:
+
+    public static void run(System.TriggerOperation op, List<<Object>> records, Map<Id, <Object>> oldMap)
+
+The trigger object is the type parameter of `List<...> records`. If the handler does not match this signature, refuse with reason:
+  "Apex handler does not match the expected run(System.TriggerOperation op, List<X> records, Map<Id, X> oldMap) signature."
+
+# Operation detection (Apex op-gate -> Flow triggerType + recordTriggerType)
+Inspect the early-return / op-equality checks at the top of run() and map them to Flow attributes:
+
+  if (op != BEFORE_INSERT) return;
+    -> triggerType=RecordBeforeSave, recordTriggerType=Create
+
+  if (op != BEFORE_UPDATE) return;
+    -> triggerType=RecordBeforeSave, recordTriggerType=Update
+
+  if (op != BEFORE_INSERT && op != BEFORE_UPDATE) return;  (or equivalent)
+    -> triggerType=RecordBeforeSave, recordTriggerType=CreateAndUpdate
+
+  if (op != AFTER_INSERT) return;
+    -> triggerType=RecordAfterSave, recordTriggerType=Create
+
+  if (op != AFTER_UPDATE) return;
+    -> triggerType=RecordAfterSave, recordTriggerType=Update
+
+  if (op != AFTER_INSERT && op != AFTER_UPDATE) return;  (or equivalent)
+    -> triggerType=RecordAfterSave, recordTriggerType=CreateAndUpdate
+
+If the gate handles a mix that does not collapse to one of the six cases above (e.g.
+BEFORE_INSERT + AFTER_UPDATE), refuse with reason:
+  "Apex op-gate mixes before-save and after-save operations; Flow allows only one trigger timing."
+
+# Translation rules — Apex element -> Flow element
+- The handler's main `for (<Object> record : records)` is NOT a Flow Loop element.
+  It is the per-record context — translate its body directly to Flow elements that
+  operate on $Record. Use $Record.FieldName for record.FieldName.
+- A `for (X item : someCollection)` inside the main loop IS a Flow Loop element,
+  iterating someCollection (typically a Get Records output).
+- record.FieldName = value           -> Assignment element writing to $Record.FieldName
+- if / else if / else                -> Decision element with one Outcome per branch
+- List<X> xs = [SELECT ... FROM X ...] -> Get Records (recordLookups) element
+- insert <ref>                       -> Create Records (recordCreates) element
+- update <ref>                       -> Update Records (recordUpdates) element
+- delete <ref>                       -> Delete Records (recordDeletes) element
+- oldMap.get(record.Id).FieldName    -> $Record__Prior.FieldName
+
+# Reference translation
+- record                 -> $Record
+- record.FieldName       -> $Record.FieldName
+- oldMap.get(record.Id)  -> $Record__Prior
+- loop iterator variable -> the Flow Loop element's loop variable
+
+# Flow XML skeleton (use this exact shape, fill in elements)
+<?xml version="1.0" encoding="UTF-8"?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>59.0</apiVersion>
+    <label><FlowLabel></label>
+    <interviewLabel><FlowLabel> {!$Flow.CurrentDateTime}</interviewLabel>
+    <processType>AutoLaunchedFlow</processType>
+    <runInMode>DefaultMode</runInMode>
+    <status>Active</status>
+    <start>
+        <locationX>50</locationX>
+        <locationY>0</locationY>
+        <connector>
+            <targetReference><firstElementName></targetReference>
+        </connector>
+        <object><SObject></object>
+        <recordTriggerType>Create</recordTriggerType>
+        <triggerType>RecordBeforeSave</triggerType>
+    </start>
+    <!-- decisions, assignments, recordLookups, recordCreates, recordUpdates, recordDeletes, loops here -->
+</Flow>
+
+Each non-start element follows this shape (vary the wrapper tag — `decisions`, `assignments`, `recordLookups`, `recordCreates`, `recordUpdates`, `recordDeletes`, `loops`):
+
+    <assignments>
+        <name>SetFieldDefault</name>
+        <label>Set Field Default</label>
+        <locationX>200</locationX>
+        <locationY>200</locationY>
+        <assignmentItems>
+            <assignToReference>$Record.FieldName</assignToReference>
+            <operator>Assign</operator>
+            <value>
+                <stringValue>SomeValue</stringValue>
+            </value>
+        </assignmentItems>
+        <connector>
+            <targetReference><nextElementName></targetReference>
+        </connector>
+    </assignments>
+
+Decisions use `<rules>` with `<conditions>`, `<connector>` to outcome target, and a `<defaultConnector>` for the else branch.
+
+# Layout coordinates
+- Use stepwise layout: start at locationX=50, locationY=0. Each subsequent element bumps
+  locationY by 150 (200, 350, 500, ...). For decision branches, offset locationX by ±200.
+
+# Final check before emitting
+Before producing output, internally verify EACH of these. If any check fails, fix the XML before emitting.
+
+  [ ] The output starts with `<?xml version="1.0" encoding="UTF-8"?>` and ends with `</Flow>`.
+  [ ] Exactly one `<start>` element exists, with `<object>`, `<triggerType>`, `<recordTriggerType>` set.
+  [ ] Every element except the terminal one has a `<connector>` with a `<targetReference>`.
+  [ ] Every `<targetReference>` points to a `<name>` of another element that exists in the file.
+  [ ] No reference to `record.` — all per-record refs use `$Record.` or `$Record__Prior.`.
+  [ ] No `<targetReference>` is empty or null.
+  [ ] If the handler had multiple op branches collapsing to a single recordTriggerType,
+       only the relevant branch's logic appears in the Flow.
+  [ ] `<apiVersion>59.0</apiVersion>`, `<processType>AutoLaunchedFlow</processType>`,
+       `<status>Active</status>` are present.
+  [ ] No XML elements outside the patterns listed in the translation rules section.
+  [ ] No CDATA blocks, no XML comments inside <Flow>, no surrounding markdown fences.
+
+Output ONLY the content between the markers. Do not include anything else.

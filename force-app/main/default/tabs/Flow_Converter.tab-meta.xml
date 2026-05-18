@@ -3,5 +3,5 @@
     <label>Flow Converter</label>
     <lwcComponent>flowToApexConverter</lwcComponent>
     <motif>Custom14: Computer</motif>
-    <description>AI-powered Flow to Apex converter UI.</description>
+    <description>AI-powered Flow ↔ Apex converter UI.</description>
 </CustomTab>

@@ -1,37 +1,42 @@
 <template>
-    <lightning-card title="Generated Apex" icon-name="standard:apex">
+    <lightning-card title="Generated Output" icon-name="standard:apex">
         <div class="slds-p-around_medium">
-            <template lwc:if={hasCode}>
-                <lightning-tabset>
-                    <lightning-tab label="Trigger">
-                        <div class="slds-m-bottom_x-small">
-                            <lightning-button-icon
-                                icon-name="utility:copy"
-                                alternative-text="Copy"
-                                title="Copy Trigger"
-                                onclick={copyTrigger}>
-                            </lightning-button-icon>
-                            <span class="slds-m-left_x-small slds-text-body_small">Copy</span>
-                        </div>
-                        <pre class="code-block">{triggerCode}</pre>
-                    </lightning-tab>
-                    <lightning-tab label="Handler">
-                        <div class="slds-m-bottom_x-small">
-                            <lightning-button-icon
-                                icon-name="utility:copy"
-                                alternative-text="Copy"
-                                title="Copy Handler"
-                                onclick={copyHandler}>
-                            </lightning-button-icon>
-                            <span class="slds-m-left_x-small slds-text-body_small">Copy</span>
-                        </div>
-                        <pre class="code-block">{handlerCode}</pre>
-                    </lightning-tab>
-                </lightning-tabset>
+
+            <template lwc:if={isHandlerCase}>
+                <div class="slds-m-bottom_x-small">
+                    <lightning-button-icon icon-name="utility:copy"
+                        alternative-text="Copy" title="Copy Handler"
+                        onclick={copyApex}>
+                    </lightning-button-icon>
+                    <span class="slds-m-left_x-small slds-text-body_small">Copy Handler</span>
+                </div>
+                <pre class="code-block">{apexCode}</pre>
             </template>
-            <template lwc:else>
+
+            <template lwc:if={isFlowCase}>
+                <div class="slds-m-bottom_x-small">
+                    <lightning-button-icon icon-name="utility:copy"
+                        alternative-text="Copy" title="Copy Flow XML"
+                        onclick={copyFlowXml}>
+                    </lightning-button-icon>
+                    <span class="slds-m-left_x-small slds-text-body_small">Copy Flow XML</span>
+                </div>
+                <pre class="code-block">{flowXml}</pre>
+            </template>
+
+            <template lwc:if={isRefusedCase}>
+                <div class="result_warning slds-p-around_medium slds-box">
+                    <div class="slds-grid slds-grid_vertical-align-center">
+                        <lightning-icon icon-name="utility:warning" variant="warning" size="small"></lightning-icon>
+                        <span class="slds-text-heading_small slds-m-left_x-small">Not translatable</span>
+                    </div>
+                    <p class="slds-m-top_small">{errorMessage}</p>
+                </div>
+            </template>
+
+            <template lwc:if={isEmptyCase}>
                 <p class="slds-text-body_small slds-text-color_weak">
-                    No generated Apex available for this record yet.
+                    No generated output available for this record yet.
                 </p>
             </template>
         </div>

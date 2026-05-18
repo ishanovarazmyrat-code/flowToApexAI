@@ -1,59 +1,70 @@
 import { LightningElement, api, wire } from 'lwc';
 import { getRecord, getFieldValue } from 'lightning/uiRecordApi';
 import { ShowToastEvent } from 'lightning/platformShowToastEvent';
-import GENERATED_APEX_FIELD from '@salesforce/schema/FlowMigration__c.Generated_Apex__c';
+import APEX_FIELD      from '@salesforce/schema/FlowMigration__c.Generated_Apex__c';
+import FLOW_XML_FIELD  from '@salesforce/schema/FlowMigration__c.Generated_Flow_XML__c';
+import DIRECTION_FIELD from '@salesforce/schema/FlowMigration__c.Direction__c';
+import STATUS_FIELD    from '@salesforce/schema/FlowMigration__c.Status__c';
+import ERROR_FIELD     from '@salesforce/schema/FlowMigration__c.Error_Message__c';
 
-const FIELDS = [GENERATED_APEX_FIELD];
+const FIELDS = [APEX_FIELD, FLOW_XML_FIELD, DIRECTION_FIELD, STATUS_FIELD, ERROR_FIELD];
 
 export default class FlowMigrationCodeViewer extends LightningElement {
     @api recordId;
-    triggerCode = '';
-    handlerCode = '';
+    apexCode      = '';
+    flowXml       = '';
+    direction     = '';
+    status        = '';
+    errorMessage  = '';
 
     @wire(getRecord, { recordId: '$recordId', fields: FIELDS })
     wiredRecord({ data, error }) {
         if (data) {
-            const combined = getFieldValue(data, GENERATED_APEX_FIELD) || '';
-            const parsed = this.parseGeneratedApex(combined);
-            this.triggerCode = parsed.trigger;
-            this.handlerCode = parsed.handler;
+            this.apexCode     = getFieldValue(data, APEX_FIELD)      || '';
+            this.flowXml      = getFieldValue(data, FLOW_XML_FIELD)  || '';
+            this.direction    = getFieldValue(data, DIRECTION_FIELD) || '';
+            this.status       = getFieldValue(data, STATUS_FIELD)    || '';
+            this.errorMessage = getFieldValue(data, ERROR_FIELD)     || '';
         }
     }
 
-    get hasCode() {
-        return (this.triggerCode && this.triggerCode.length > 0)
-            || (this.handlerCode && this.handlerCode.length > 0);
+    // Render decisions prefer Direction__c when present, but fall back to
+    // whichever output field is populated. This keeps the component working
+    // even when Direction__c is missing from the page layout, lacks FLS read
+    // for the running user, or was null on legacy records.
+
+    get isHandlerCase() {
+        if (this.direction === 'Apex_To_Flow') return false;
+        return this.apexCode.length > 0;
+    }
+    get isFlowCase() {
+        if (this.direction === 'Flow_To_Apex') return false;
+        if (this.flowXml.length === 0) return false;
+        // When direction is unknown, only treat as Flow-case if no apex output exists
+        return this.direction === 'Apex_To_Flow' || this.apexCode.length === 0;
+    }
+    get isRefusedCase() {
+        if (this.direction === 'Flow_To_Apex') return false;
+        return this.apexCode.length === 0
+            && this.flowXml.length === 0
+            && this.errorMessage.length > 0;
+    }
+    get isEmptyCase() {
+        return !this.isHandlerCase && !this.isFlowCase && !this.isRefusedCase;
     }
 
-    parseGeneratedApex(combined) {
-        const trigMarker = '// ===== TRIGGER =====';
-        const handMarker = '// ===== HANDLER =====';
-        const trigStart = combined.indexOf(trigMarker);
-        const handStart = combined.indexOf(handMarker);
-        if (trigStart === -1 || handStart === -1) {
-            return { trigger: '', handler: combined.trim() };
-        }
-        const trigger = combined.substring(trigStart + trigMarker.length, handStart).trim();
-        const handler = combined.substring(handStart + handMarker.length).trim();
-        return { trigger, handler };
-    }
-
-    copyTrigger() { this.copyToClipboard(this.triggerCode, 'Trigger'); }
-    copyHandler() { this.copyToClipboard(this.handlerCode, 'Handler'); }
+    copyApex()    { this.copyToClipboard(this.apexCode, 'Handler'); }
+    copyFlowXml() { this.copyToClipboard(this.flowXml,  'Flow XML'); }
 
     async copyToClipboard(text, label) {
         try {
-            await navigator.clipboard.writeText(text);
+            await navigator.clipboard.writeText(text || '');
             this.dispatchEvent(new ShowToastEvent({
-                title: 'Copied',
-                message: label + ' code copied to clipboard',
-                variant: 'success'
+                title: 'Copied', message: label + ' copied to clipboard', variant: 'success'
             }));
         } catch (e) {
             this.dispatchEvent(new ShowToastEvent({
-                title: 'Copy failed',
-                message: e.message,
-                variant: 'error'
+                title: 'Copy failed', message: e.message, variant: 'error'
             }));
         }
     }

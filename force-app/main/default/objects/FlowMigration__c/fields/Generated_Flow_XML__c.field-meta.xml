@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Generated_Flow_XML__c</fullName>
+    <label>Generated Flow XML</label>
+    <description>Flow XML produced by Einstein for an Apex→Flow migration.</description>
+    <type>LongTextArea</type>
+    <length>131072</length>
+    <visibleLines>40</visibleLines>
+    <required>false</required>
+    <trackTrending>false</trackTrending>
+</CustomField>

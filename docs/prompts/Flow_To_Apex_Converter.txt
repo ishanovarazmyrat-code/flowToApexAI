@@ -1,0 +1,127 @@
+You are an expert Salesforce Apex developer. Convert the following Salesforce Record-Triggered Flow metadata into a bulk-safe Apex Handler class designed to be invoked from a single per-object Trigger Dispatcher.
+
+# Input Flow metadata (JSON)
+{!$Input:flowMetadata}
+
+# MANDATORY HANDLER SIGNATURE — DO NOT DEVIATE
+Every handler MUST expose exactly ONE public static method named `run` with this exact signature:
+
+    public static void run(System.TriggerOperation op, List<<Object>> records, Map<Id, <Object>> oldMap)
+
+DO NOT generate methods named `beforeSave`, `afterInsert`, `beforeInsert`, `beforeUpdate`, `afterUpdate`, `afterSave`, `execute`, `handle`, `main`, or anything else.
+DO NOT generate an overloaded `run` with fewer parameters (e.g. `run(List<Account> records)`).
+DO NOT generate multiple public methods. Helper methods may be private.
+The dispatcher calls `<HandlerName>.run(op, records, oldMap);` — any other signature WILL fail to compile.
+
+# Output format
+Return ONLY content in the format below. No prose, no markdown fences, no explanations outside the markers.
+
+===OBJECT===
+<SObject name, e.g. Account>
+===HANDLER===
+<the full Apex handler class body — class only, no trigger>
+===DISPATCHER===
+<HandlerName>.run(op, records, oldMap);
+
+# Apex requirements
+
+1. HANDLER-ONLY OUTPUT. Do NOT emit:
+   - a `trigger XxxTrigger on Xxx (...)` declaration
+   - a `// ===== TRIGGER =====` section or any trigger code
+   - any code outside the single handler class body
+   - any commentary, markdown fences, or surrounding text
+   The org already has one trigger per object that calls the dispatcher. Producing a trigger here will conflict with the existing one and break the deployment.
+
+2. HANDLER SHAPE (this is the ONLY allowed structure):
+
+    public with sharing class <FlowLabel>Handler {
+
+        public static void run(System.TriggerOperation op, List<<Object>> records, Map<Id, <Object>> oldMap) {
+            // Operation gate — early return if op is not applicable to this Flow's trigger type.
+            if (op != System.TriggerOperation.BEFORE_INSERT /* etc. */) return;
+
+            // Per-record processing
+            Map<Id, <Object>> recordsToUpdate = new Map<Id, <Object>>(); // only if needed (after-save)
+            for (<Object> record : records) {
+                // Translated Flow logic here
+            }
+
+            // Bulk DML after the loop
+            if (!recordsToUpdate.isEmpty()) {
+                update recordsToUpdate.values();
+            }
+        }
+    }
+
+3. Operation filtering (use `System.TriggerOperation`):
+   Flow `triggerType=RecordBeforeSave` + `recordTriggerType=Create`           -> handle BEFORE_INSERT
+   Flow `triggerType=RecordBeforeSave` + `recordTriggerType=Update`           -> handle BEFORE_UPDATE
+   Flow `triggerType=RecordBeforeSave` + `recordTriggerType=CreateAndUpdate`  -> handle BEFORE_INSERT and BEFORE_UPDATE
+   Flow `triggerType=RecordAfterSave`  + `recordTriggerType=Create`           -> handle AFTER_INSERT
+   Flow `triggerType=RecordAfterSave`  + `recordTriggerType=Update`           -> handle AFTER_UPDATE
+   Flow `triggerType=RecordAfterSave`  + `recordTriggerType=CreateAndUpdate`  -> handle AFTER_INSERT and AFTER_UPDATE
+
+   At the top of run(), early-return if op is not one of the applicable operations:
+       if (op != System.TriggerOperation.BEFORE_INSERT && op != System.TriggerOperation.BEFORE_UPDATE) return;
+
+4. Naming:
+   - Handler class: <FlowLabel>Handler. Strip spaces, PascalCase, alphanumeric only.
+     Example: Flow label "Account Set Default Industry" -> class `AccountSetDefaultIndustryHandler`.
+   - The DISPATCHER section MUST be exactly one line in this form:
+       <HandlerClassName>.run(op, records, oldMap);
+     No extra characters, no semicolon-less, no method other than `run`, no different parameter order.
+
+5. CRITICAL — bulk safety:
+   - Wrap all logic in a single for-each loop over `records`.
+   - NEVER place DML or SOQL inside an inner loop.
+   - When the Flow has a Loop element with Update/Create/Delete inside, lift the DML out of the loop:
+       Map<Id, SObject> collector = new Map<Id, SObject>();
+       for (...) { collector.put(item.Id, item); }
+       if (!collector.isEmpty()) { update collector.values(); }
+   - For after-save Flows that assign to $Record fields, you cannot mutate `records` in place
+     (after-save records are read-only). Aggregate into a method-scoped `Map<Id, <Object>> recordsToUpdate`
+     by re-querying or constructing new SObject instances keyed by record.Id, and bulk `update`
+     at the end of run().
+
+6. Element translation:
+   - recordLookups (Get Records)  -> SOQL: `List<X> camelName = [SELECT Id FROM X WHERE filters];`
+   - recordUpdates                -> `update <ref>` (or `Map.put` if inside a loop)
+   - recordCreates                -> `insert <ref>` (collect in list, insert after loop)
+   - recordDeletes                -> `delete <ref>` (collect in list, delete after loop)
+   - decisions                    -> if / else if / else chain
+   - loops                        -> `for (X item : collection)`
+   - assignments                  -> field assignment statements
+
+7. Reference translation:
+   - `$Record`            -> `record`
+   - `$Record.FieldName`  -> `record.FieldName`
+   - Loop variable refs   -> the inner loop iterator variable
+   - `$Record__Prior`     -> `oldMap.get(record.Id)` (only available on update operations)
+
+8. Handler class header comment MUST include:
+   /**
+    * Source Flow Label : <flow label>
+    * Trigger Object    : <object>
+    * Record Operation  : <Create | Update | CreateAndUpdate>
+    * Trigger Timing    : <Before Save | After Save>
+    *
+    * AI-generated by Einstein. Review business logic and add CRUD/FLS checks before deploying to production.
+    */
+
+# Final check before emitting
+Before producing output, internally verify EACH of these. If any check fails, fix the code before emitting.
+
+  [ ] The output contains NO `trigger` keyword anywhere.
+  [ ] The output contains NO `// ===== TRIGGER =====` marker.
+  [ ] The handler has EXACTLY ONE public static method, and it is named `run`.
+  [ ] That method's signature is EXACTLY:
+        public static void run(System.TriggerOperation op, List<<Object>> records, Map<Id, <Object>> oldMap)
+      with all three parameters present and in this exact order.
+  [ ] All operation routing happens INSIDE `run` via `if (op == System.TriggerOperation.XXX)` checks, not via separate methods.
+  [ ] The ===DISPATCHER=== section contains exactly ONE line of the form:
+        <HandlerClassName>.run(op, records, oldMap);
+  [ ] No DML or SOQL inside any loop.
+  [ ] The class is declared `public with sharing`.
+  [ ] The class header comment is present.
+
+Output ONLY the content between the markers. Do not include anything else.
