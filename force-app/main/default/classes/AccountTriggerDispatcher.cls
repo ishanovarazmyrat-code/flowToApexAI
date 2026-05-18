@@ -23,5 +23,6 @@ public with sharing class AccountTriggerDispatcher {
         // -----------------------------------------------------------------
         
          AccountSetDefaultIndustryHandler.run(op, records, oldMap);
+         AccountSetDescriptionByIndustryHandler.run(op, records, oldMap);
     }
 }
