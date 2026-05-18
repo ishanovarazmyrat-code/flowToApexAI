@@ -1,17 +1,27 @@
-You are an expert Salesforce Apex developer. Convert the following Salesforce Record-Triggered Flow metadata into a bulk-safe Apex Handler class designed to be invoked from a single per-object Trigger Dispatcher.
+You are an expert Salesforce Apex developer. Convert the following Salesforce Record-Triggered Flow metadata into a bulk-safe Apex Handler class that implements IFlowMigrationHandler and is designed to be invoked from the CMT-based per-object Trigger Dispatcher.
 
 # Input Flow metadata (JSON)
 {!$Input:flowMetadata}
 
 # MANDATORY HANDLER SIGNATURE — DO NOT DEVIATE
-Every handler MUST expose exactly ONE public static method named `run` with this exact signature:
+Every handler MUST implement IFlowMigrationHandler and expose exactly ONE public instance method named `run` with this exact signature:
 
-    public static void run(System.TriggerOperation op, List<<Object>> records, Map<Id, <Object>> oldMap)
+    public void run(System.TriggerOperation op, List<SObject> records, Map<Id, SObject> oldMap)
 
+DO NOT generate `public static void run(...)` — it MUST be an instance method (no `static` keyword).
 DO NOT generate methods named `beforeSave`, `afterInsert`, `beforeInsert`, `beforeUpdate`, `afterUpdate`, `afterSave`, `execute`, `handle`, `main`, or anything else.
-DO NOT generate an overloaded `run` with fewer parameters (e.g. `run(List<Account> records)`).
+DO NOT generate an overloaded `run` with fewer parameters.
 DO NOT generate multiple public methods. Helper methods may be private.
-The dispatcher calls `<HandlerName>.run(op, records, oldMap);` — any other signature WILL fail to compile.
+
+Because records and oldMap are typed as List<SObject> / Map<Id,SObject>, you MUST cast inside the method before accessing typed fields:
+
+    for (SObject sObj : records) {
+        <Object> record = (<Object>) sObj;
+        // access record.FieldName here
+    }
+
+For oldMap access:
+    <Object> oldRecord = (<Object>) oldMap?.get(record.Id);
 
 # Output format
 Return ONLY content in the format below. No prose, no markdown fences, no explanations outside the markers.
@@ -21,7 +31,7 @@ Return ONLY content in the format below. No prose, no markdown fences, no explan
 ===HANDLER===
 <the full Apex handler class body — class only, no trigger>
 ===DISPATCHER===
-<HandlerName>.run(op, records, oldMap);
+<HandlerName> registered automatically via Trigger_Handler__mdt — no dispatcher edit needed.
 
 # Apex requirements
 
@@ -30,19 +40,20 @@ Return ONLY content in the format below. No prose, no markdown fences, no explan
    - a `// ===== TRIGGER =====` section or any trigger code
    - any code outside the single handler class body
    - any commentary, markdown fences, or surrounding text
-   The org already has one trigger per object that calls the dispatcher. Producing a trigger here will conflict with the existing one and break the deployment.
+   The org already has one trigger per object that calls the CMT-based dispatcher. Producing a trigger here will conflict with the existing one and break the deployment.
 
 2. HANDLER SHAPE (this is the ONLY allowed structure):
 
-    public with sharing class <FlowLabel>Handler {
+    public with sharing class <FlowLabel>Handler implements IFlowMigrationHandler {
 
-        public static void run(System.TriggerOperation op, List<<Object>> records, Map<Id, <Object>> oldMap) {
+        public void run(System.TriggerOperation op, List<SObject> records, Map<Id, SObject> oldMap) {
             // Operation gate — early return if op is not applicable to this Flow's trigger type.
             if (op != System.TriggerOperation.BEFORE_INSERT /* etc. */) return;
 
-            // Per-record processing
+            // Per-record processing — cast to the concrete type inside the method
             Map<Id, <Object>> recordsToUpdate = new Map<Id, <Object>>(); // only if needed (after-save)
-            for (<Object> record : records) {
+            for (SObject sObj : records) {
+                <Object> record = (<Object>) sObj;
                 // Translated Flow logic here
             }
 
@@ -68,15 +79,17 @@ Return ONLY content in the format below. No prose, no markdown fences, no explan
    - Handler class: <FlowLabel>Handler. Strip spaces, PascalCase, alphanumeric only.
      Example: Flow label "Account Set Default Industry" -> class `AccountSetDefaultIndustryHandler`.
    - The DISPATCHER section MUST be exactly one line in this form:
-       <HandlerClassName>.run(op, records, oldMap);
-     No extra characters, no semicolon-less, no method other than `run`, no different parameter order.
+       <HandlerClassName> registered automatically via Trigger_Handler__mdt — no dispatcher edit needed.
 
 5. CRITICAL — bulk safety:
-   - Wrap all logic in a single for-each loop over `records`.
+   - Wrap all logic in a single for-each loop over `records` (casting each element to the concrete type).
    - NEVER place DML or SOQL inside an inner loop.
    - When the Flow has a Loop element with Update/Create/Delete inside, lift the DML out of the loop:
        Map<Id, SObject> collector = new Map<Id, SObject>();
-       for (...) { collector.put(item.Id, item); }
+       for (SObject sObj : records) {
+           <Object> record = (<Object>) sObj;
+           collector.put(record.Id, record);
+       }
        if (!collector.isEmpty()) { update collector.values(); }
    - For after-save Flows that assign to $Record fields, you cannot mutate `records` in place
      (after-save records are read-only). Aggregate into a method-scoped `Map<Id, <Object>> recordsToUpdate`
@@ -89,14 +102,14 @@ Return ONLY content in the format below. No prose, no markdown fences, no explan
    - recordCreates                -> `insert <ref>` (collect in list, insert after loop)
    - recordDeletes                -> `delete <ref>` (collect in list, delete after loop)
    - decisions                    -> if / else if / else chain
-   - loops                        -> `for (X item : collection)`
+   - loops                        -> `for (SObject sObj : collection) { X item = (X) sObj; ... }`
    - assignments                  -> field assignment statements
 
 7. Reference translation:
-   - `$Record`            -> `record`
+   - `$Record`            -> `record` (after casting from sObj)
    - `$Record.FieldName`  -> `record.FieldName`
-   - Loop variable refs   -> the inner loop iterator variable
-   - `$Record__Prior`     -> `oldMap.get(record.Id)` (only available on update operations)
+   - Loop variable refs   -> the inner loop iterator variable (cast appropriately)
+   - `$Record__Prior`     -> `(<Object>) oldMap.get(record.Id)` (only available on update operations)
 
 8. Handler class header comment MUST include:
    /**
@@ -113,13 +126,15 @@ Before producing output, internally verify EACH of these. If any check fails, fi
 
   [ ] The output contains NO `trigger` keyword anywhere.
   [ ] The output contains NO `// ===== TRIGGER =====` marker.
-  [ ] The handler has EXACTLY ONE public static method, and it is named `run`.
+  [ ] The class declaration includes `implements IFlowMigrationHandler`.
+  [ ] The handler has EXACTLY ONE public method, it is named `run`, and it is NOT static.
   [ ] That method's signature is EXACTLY:
-        public static void run(System.TriggerOperation op, List<<Object>> records, Map<Id, <Object>> oldMap)
+        public void run(System.TriggerOperation op, List<SObject> records, Map<Id, SObject> oldMap)
       with all three parameters present and in this exact order.
+  [ ] Every access to typed fields is preceded by a cast: `<Object> record = (<Object>) sObj;`
   [ ] All operation routing happens INSIDE `run` via `if (op == System.TriggerOperation.XXX)` checks, not via separate methods.
   [ ] The ===DISPATCHER=== section contains exactly ONE line of the form:
-        <HandlerClassName>.run(op, records, oldMap);
+        <HandlerClassName> registered automatically via Trigger_Handler__mdt — no dispatcher edit needed.
   [ ] No DML or SOQL inside any loop.
   [ ] The class is declared `public with sharing`.
   [ ] The class header comment is present.

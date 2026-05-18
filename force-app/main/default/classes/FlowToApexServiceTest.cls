@@ -1,17 +1,21 @@
 @IsTest
 private class FlowToApexServiceTest {
 
+    // Handler code now implements IFlowMigrationHandler (instance method, not static)
     private static final String VALID_RESPONSE =
         '===OBJECT===\nAccount\n' +
         '===HANDLER===\n' +
-        'public with sharing class AccountSetDefaultIndustryHandler {\n' +
-        '    public static void run(System.TriggerOperation op, List<Account> records, Map<Id, Account> oldMap) {\n' +
+        'public with sharing class AccountSetDefaultIndustryHandler implements IFlowMigrationHandler {\n' +
+        '    public void run(System.TriggerOperation op, List<SObject> records, Map<Id, SObject> oldMap) {\n' +
         '        if (op != System.TriggerOperation.BEFORE_INSERT) return;\n' +
-        '        for (Account record : records) if (record.Industry == null) record.Industry = \'Other\';\n' +
+        '        for (SObject sObj : records) {\n' +
+        '            Account record = (Account) sObj;\n' +
+        '            if (record.Industry == null) record.Industry = \'Other\';\n' +
+        '        }\n' +
         '    }\n' +
         '}\n' +
         '===DISPATCHER===\n' +
-        'AccountSetDefaultIndustryHandler.run(op, records, oldMap);';
+        'AccountSetDefaultIndustryHandler registered via Trigger_Handler__mdt.';
 
     @IsTest
     static void blankName_fails() {
@@ -38,15 +42,18 @@ private class FlowToApexServiceTest {
 
         FlowMigration__c rec = [
             SELECT Source_Flow_Name__c, Direction__c, Object_Name__c,
-                   Status__c, Generated_Apex__c
+                   Status__c, Generated_Apex__c, Deploy_Status__c
             FROM FlowMigration__c
             WHERE Id = :r.migrationId
         ];
-        Assert.areEqual('Flow_To_Apex', rec.Direction__c);
-        Assert.areEqual('Account', rec.Object_Name__c);
-        Assert.areEqual('Generated', rec.Status__c);
+        Assert.areEqual('Flow_To_Apex',    rec.Direction__c);
+        Assert.areEqual('Account',         rec.Object_Name__c);
+        Assert.areEqual('Generated',       rec.Status__c);
         Assert.isTrue(rec.Generated_Apex__c.contains('AccountSetDefaultIndustryHandler'));
-        Assert.isTrue(rec.Generated_Apex__c.contains('Register this handler'));
+        // In test context ApexDeployService skips the CMT enqueue but the class deploy
+        // callout is handled by ToolingMock — status should be Deployed.
+        Assert.areEqual('Deployed', rec.Deploy_Status__c);
+        Assert.areEqual('Deployed', r.deployStatus);
     }
 
     @IsTest
@@ -79,20 +86,42 @@ private class FlowToApexServiceTest {
         Assert.isTrue(rec.Error_Message__c.contains('===HANDLER==='));
     }
 
+    // -------------------------------------------------------------------------
+    // Mock: handles FlowDefinition query, Flow metadata query, ApexClass check,
+    //       and ApexClass create — all via a single HttpCalloutMock.
+    // -------------------------------------------------------------------------
     private class ToolingMock implements HttpCalloutMock {
-        private Boolean exists;
-        public ToolingMock(Boolean e) { this.exists = e; }
+        private final Boolean flowExists;
+        public ToolingMock(Boolean flowExists) { this.flowExists = flowExists; }
+
         public HttpResponse respond(HttpRequest req) {
             HttpResponse r = new HttpResponse();
             r.setStatusCode(200);
-            r.setHeader('Content-Type','application/json');
-            String ep = req.getEndpoint();
-            Boolean isDef = ep.contains('FROM+FlowDefinition') || ep.contains('FROM%20FlowDefinition');
-            if (isDef) {
-                r.setBody(exists
+            r.setHeader('Content-Type', 'application/json');
+
+            String ep     = req.getEndpoint();
+            String method = req.getMethod();
+
+            // POST → create ApexClass
+            if (method == 'POST' && ep.contains('/tooling/sobjects/ApexClass')) {
+                r.setBody('{"id":"01pxx000000FAKE","success":true,"errors":[]}');
+                r.setStatusCode(201);
+                return r;
+            }
+
+            // GET queries (all use /tooling/query/)
+            Boolean isFlowDef  = ep.contains('FROM+FlowDefinition')  || ep.contains('FROM%20FlowDefinition');
+            Boolean isApexClass = ep.contains('FROM+ApexClass')       || ep.contains('FROM%20ApexClass');
+
+            if (isFlowDef) {
+                r.setBody(flowExists
                     ? '{"records":[{"Id":"301xx001","DeveloperName":"X","ActiveVersionId":"301xx002"}]}'
                     : '{"records":[]}');
+            } else if (isApexClass) {
+                // Simulate class not yet existing → dispatcher will create it
+                r.setBody('{"totalSize":0,"done":true,"records":[]}');
             } else {
+                // Flow version metadata
                 r.setBody('{"records":[{"Id":"301xx002","MasterLabel":"X","Metadata":{"label":"X","processType":"AutoLaunchedFlow","status":"Active","start":{"object":"Account","triggerType":"RecordBeforeSave"}}}]}');
             }
             return r;
