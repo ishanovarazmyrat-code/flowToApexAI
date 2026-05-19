@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>flowToApexAI — User Guide</title>
+<style>
+  :root {
+    --brand:   #0176d3;
+    --success: #2e844a;
+    --warning: #dd7a01;
+    --error:   #ba0517;
+    --bg:      #f3f2f2;
+    --surface: #ffffff;
+    --border:  #dddbda;
+    --text:    #181818;
+    --muted:   #444;
+    --code-bg: #1b1f23;
+    --code-fg: #e6edf3;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    font-size: 15px;
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.7;
+  }
+
+  /* ── layout ── */
+  .page { max-width: 900px; margin: 0 auto; padding: 48px 32px 80px; }
+
+  /* ── header ── */
+  .hero {
+    background: linear-gradient(135deg, #032d60 0%, #0176d3 100%);
+    color: #fff;
+    border-radius: 12px;
+    padding: 48px 40px 40px;
+    margin-bottom: 40px;
+  }
+  .hero h1 { font-size: 2.2rem; font-weight: 700; letter-spacing: -.5px; }
+  .hero p  { margin-top: 12px; color: #fff; font-size: 1.05rem; max-width: 640px; }
+  .badge-row { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+  .badge {
+    background: rgba(255,255,255,.15);
+    border: 1px solid rgba(255,255,255,.3);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: .8rem;
+    font-weight: 600;
+    letter-spacing: .3px;
+  }
+
+  /* ── toc ── */
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin-bottom: 36px;
+  }
+  .toc h2 { font-size: 1rem; font-weight: 700; margin-bottom: 12px; color: var(--brand); }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin-bottom: 4px; }
+  .toc a  { color: var(--brand); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+
+  /* ── sections ── */
+  section { margin-bottom: 48px; }
+  h2 {
+    font-size: 1.45rem;
+    font-weight: 700;
+    color: var(--brand);
+    border-bottom: 2px solid var(--border);
+    padding-bottom: 8px;
+    margin-bottom: 20px;
+  }
+  h3 { font-size: 1.1rem; font-weight: 700; margin: 24px 0 10px; }
+  p  { margin-bottom: 12px; color: var(--muted); }
+
+  /* ── callouts ── */
+  .callout {
+    border-left: 4px solid;
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 16px 0;
+    font-size: .93rem;
+  }
+  .callout.info    { border-color: var(--brand);   background: #e8f4fd; }
+  .callout.success { border-color: var(--success); background: #eaf5ea; }
+  .callout.warning { border-color: var(--warning); background: #fdf6e3; }
+  .callout.error   { border-color: var(--error);   background: #fcecea; }
+  .callout strong  { display: block; margin-bottom: 4px; }
+
+  /* ── steps ── */
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 0 14px;
+    align-items: start;
+    margin-bottom: 18px;
+  }
+  .steps li::before {
+    content: counter(step);
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #fff;
+    font-weight: 700;
+    font-size: .9rem;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .steps li .content { padding-top: 6px; }
+  .steps li .content p { margin-bottom: 6px; }
+
+  /* ── code ── */
+  pre, code {
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+  }
+  code {
+    background: #eef2f7;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: .87em;
+    color: #032d60;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-fg);
+    border-radius: 8px;
+    padding: 18px 20px;
+    overflow-x: auto;
+    font-size: .85rem;
+    line-height: 1.6;
+    margin: 12px 0;
+  }
+  pre code { background: transparent; padding: 0; color: inherit; font-size: inherit; }
+
+  /* ── table ── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: .92rem;
+  }
+  th {
+    background: #032d60;
+    color: #fff;
+    text-align: left;
+    padding: 10px 14px;
+    font-weight: 600;
+  }
+  td { padding: 9px 14px; border-bottom: 1px solid var(--border); }
+  tr:nth-child(even) td { background: #f8f8f8; }
+
+  /* ── flow diagram ── */
+  .diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin: 16px 0;
+    overflow-x: auto;
+  }
+  .diagram pre {
+    background: transparent;
+    color: var(--text);
+    font-size: .82rem;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* ── status badges ── */
+  .badge-ok  { color: var(--success); font-weight: 700; }
+  .badge-err { color: var(--error);   font-weight: 700; }
+  .badge-wrn { color: var(--warning); font-weight: 700; }
+
+  /* ── field list ── */
+  .field-list { list-style: none; padding: 0; }
+  .field-list li {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .field-list li:last-child { border-bottom: none; }
+  .field-list .fname { font-weight: 600; min-width: 220px; font-size: .88rem; }
+  .field-list .fdesc { color: var(--muted); font-size: .88rem; }
+
+  /* ── print ── */
+  @media print {
+    body { background: #fff; }
+    .hero { background: #032d60 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    pre { white-space: pre-wrap; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ── HERO ── -->
+  <div class="hero">
+    <h1>flowToApexAI</h1>
+    <p>AI-powered, bidirectional Salesforce Flow ↔ Apex migration tool. Runs entirely inside your org. Zero manual deployment steps.</p>
+    <div class="badge-row">
+      <span class="badge">Salesforce Native</span>
+      <span class="badge">Einstein Trust Layer</span>
+      <span class="badge">Auto-Deploy</span>
+      <span class="badge">CMT-Based Dispatch</span>
+    </div>
+  </div>
+
+  <!-- ── TOC ── -->
+  <div class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Overview</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#prerequisites">Prerequisites</a></li>
+      <li><a href="#deploy">Deploy to Org</a></li>
+      <li><a href="#setup">Post-Deploy Setup</a></li>
+      <li><a href="#use-flow-to-apex">Using Flow → Apex</a></li>
+      <li><a href="#use-apex-to-flow">Using Apex → Flow</a></li>
+      <li><a href="#records">Migration Records</a></li>
+      <li><a href="#handlers">Handler Registry (Trigger_Handler__mdt)</a></li>
+      <li><a href="#troubleshooting">Troubleshooting</a></li>
+      <li><a href="#reference">Component Reference</a></li>
+    </ol>
+  </div>
+
+  <!-- ── 1 OVERVIEW ── -->
+  <section id="overview">
+    <h2>1 — Overview</h2>
+    <p>
+      flowToApexAI converts Salesforce automation in both directions using Einstein Generative AI.
+      Everything runs inside the org — no external services, no CLI after deploy.
+    </p>
+
+    <table>
+      <thead><tr><th>Direction</th><th>Input</th><th>Output</th><th>Auto-deploy?</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><strong>Flow → Apex</strong></td>
+          <td>Record-Triggered Flow API name</td>
+          <td>Apex handler class implementing <code>IFlowMigrationHandler</code></td>
+          <td><span class="badge-ok">Yes — handler deployed + CMT registered automatically</span></td>
+        </tr>
+        <tr>
+          <td><strong>Apex → Flow</strong></td>
+          <td>Apex handler class name</td>
+          <td>Deploy-ready <code>.flow-meta.xml</code> or a refusal with reason</td>
+          <td><span class="badge-wrn">No — copy the XML and deploy via SF CLI or Setup</span></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout info">
+      <strong>Einstein Trust Layer</strong>
+      All AI calls go through Salesforce Prompt Builder and stay within your org's Einstein Trust Layer boundary. No data leaves Salesforce.
+    </div>
+  </section>
+
+  <!-- ── 2 ARCHITECTURE ── -->
+  <section id="architecture">
+    <h2>2 — Architecture</h2>
+
+    <div class="diagram">
+      <pre>
+User (Lightning App — "Flow to Apex AI")
+   │
+   ▼
+LWC: flowToApexConverter          ◄── direction toggle
+   │
+   ├── Flow → Apex path
+   │     FlowReaderService         Tooling API → reads Flow JSON
+   │     EinsteinPromptClient      Prompt Builder → Einstein
+   │     ApexDeployService         Tooling API → creates ApexClass
+   │     insert FlowMigration__c   persists result
+   │     ApexDeployService @future Metadata.Operations → Trigger_Handler__mdt
+   │
+   └── Apex → Flow path
+         ApexSourceReaderService   Tooling API → reads Apex body
+         EinsteinPromptClient      Prompt Builder → Einstein
+         insert FlowMigration__c   persists result (XML or refusal)
+
+── Trigger dispatch (Flow→Apex result) ───────────────────────────────────────
+AccountTrigger → AccountTriggerDispatcher.dispatch()
+   └── SELECT Handler_Class__c FROM Trigger_Handler__mdt
+         WHERE Object__c = 'Account' AND Active__c = true
+         ORDER BY Order__c ASC NULLS LAST
+           └── Type.forName(Handler_Class__c).newInstance()
+                 → IFlowMigrationHandler.run(op, records, oldMap)
+      </pre>
+    </div>
+
+    <h3>Key design decisions</h3>
+    <table>
+      <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>Callouts before DML</td>
+          <td>Salesforce prohibits callouts after DML in the same transaction. All Tooling API + Einstein calls happen first.</td>
+        </tr>
+        <tr>
+          <td>CMT registration in <code>@future</code></td>
+          <td><code>Metadata.Operations.enqueueDeployment()</code> (setup object) cannot run in the same transaction as <code>insert FlowMigration__c</code> (non-setup). <code>@future</code> isolates the two.</td>
+        </tr>
+        <tr>
+          <td>Skip PATCH on existing class</td>
+          <td>Tooling API PATCH on a metadata-deployed ApexClass requires a MetadataContainer workflow. We skip the update — existing class body is preserved, CMT registration still runs.</td>
+        </tr>
+        <tr>
+          <td>CMT-based dispatch</td>
+          <td>One trigger per object, never modified. New handlers register via a metadata record — zero code changes to the dispatcher.</td>
+        </tr>
+        <tr>
+          <td>SessionIdPage VF</td>
+          <td>Tooling API self-callouts require a REST-valid session ID. Lightning sessions are not REST-valid; the VF page surfaces one.</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ── 3 PREREQUISITES ── -->
+  <section id="prerequisites">
+    <h2>3 — Prerequisites</h2>
+    <ul class="steps">
+      <li><div class="content"><p><strong>Einstein Generative AI enabled</strong> — Setup → Einstein Setup → turn on Generative AI.</p></div></li>
+      <li><div class="content"><p><strong>Prompt Builder enabled</strong> — Setup → Einstein → Prompt Builder → enable.</p></div></li>
+      <li><div class="content">
+        <p><strong>Two Prompt Templates created in Prompt Builder:</strong></p>
+        <table>
+          <thead><tr><th>Template API Name</th><th>Input Variable</th><th>Source File</th></tr></thead>
+          <tbody>
+            <tr><td><code>Flow_To_Apex_Converter</code></td><td><code>flowMetadata</code> (Free Text)</td><td><code>docs/prompts/Flow_To_Apex_Converter.txt</code></td></tr>
+            <tr><td><code>Apex_To_Flow_Converter</code></td><td><code>apexSource</code> (Free Text)</td><td><code>docs/prompts/Apex_To_Flow_Converter.txt</code></td></tr>
+          </tbody>
+        </table>
+        <p>Paste the file content into the template body. The API name must match exactly (case-sensitive).</p>
+      </div></li>
+      <li><div class="content"><p><strong>Remote Site Setting</strong> — Setup → Remote Site Settings → add your org's My Domain URL (e.g. <code>https://myorg.my.salesforce.com</code>). Required so Apex can call the Tooling API on the same org.</p></div></li>
+    </ul>
+  </section>
+
+  <!-- ── 4 DEPLOY ── -->
+  <section id="deploy">
+    <h2>4 — Deploy to Org</h2>
+    <p>Run from the project root:</p>
+    <pre><code>sf project deploy start \
+  --source-dir force-app/main/default \
+  --target-org &lt;orgAlias&gt;</code></pre>
+
+    <div class="callout info">
+      <strong>What gets deployed</strong>
+      Apex classes + triggers + dispatchers, LWCs, FlowMigration__c custom object, Trigger_Handler__mdt CMT type, two seed CMT records for the existing Account handlers, Visualforce SessionIdPage, custom tabs, Lightning App.
+    </div>
+  </section>
+
+  <!-- ── 5 POST-DEPLOY SETUP ── -->
+  <section id="setup">
+    <h2>5 — Post-Deploy Setup</h2>
+    <ul class="steps">
+      <li><div class="content">
+        <p><strong>Field-Level Security</strong> — Grant Read (and Edit where appropriate) on all <code>FlowMigration__c</code> fields to the running user's profile or permission set.</p>
+        <p>Fields: <code>Source_Flow_Name__c</code>, <code>Object_Name__c</code>, <code>Direction__c</code>, <code>Status__c</code>, <code>Generated_Apex__c</code>, <code>Generated_Flow_XML__c</code>, <code>Error_Message__c</code>, <code>Deploy_Status__c</code>.</p>
+      </div></li>
+      <li><div class="content">
+        <p><strong>Page Layout</strong> — Add <code>Direction</code> and <code>Deploy Status</code> fields to the Flow Migration page layout if you want them visible on the record detail page.</p>
+      </div></li>
+      <li><div class="content">
+        <p><strong>Verify Prompt Templates</strong> — In Prompt Builder, open both templates and run a quick test to confirm Einstein responds without errors.</p>
+      </div></li>
+    </ul>
+  </section>
+
+  <!-- ── 6 FLOW TO APEX ── -->
+  <section id="use-flow-to-apex">
+    <h2>6 — Using Flow → Apex</h2>
+
+    <h3>Step-by-step</h3>
+    <ul class="steps">
+      <li><div class="content"><p>App Launcher → <strong>Flow to Apex AI</strong>.</p></div></li>
+      <li><div class="content"><p>Direction toggle: select <strong>Flow → Apex</strong> (default).</p></div></li>
+      <li><div class="content"><p>Enter the Flow's <strong>API Name</strong> exactly as it appears in Setup → Flows (e.g. <code>Account_Set_Default_Industry</code>). The Flow must be a Record-Triggered Flow and must be active.</p></div></li>
+      <li><div class="content"><p>Click <strong>Convert</strong>. The spinner shows "Converting — this can take 10 to 30 seconds."</p></div></li>
+      <li><div class="content">
+        <p>Result appears inline. On success:</p>
+        <ul style="margin-left:16px; margin-top:6px;">
+          <li>The generated handler Apex class is shown with a Copy button.</li>
+          <li><span class="badge-ok">✓ Deployed &amp; registered in Trigger_Handler__mdt — active on next trigger fire.</span></li>
+        </ul>
+      </div></li>
+    </ul>
+
+    <h3>What happens automatically</h3>
+    <ol style="margin-left:20px; color:var(--muted);">
+      <li style="margin-bottom:8px;">Einstein reads the Flow JSON via the Tooling API.</li>
+      <li style="margin-bottom:8px;">The handler class is created in the org via Tooling API POST to <code>/services/data/v59.0/tooling/sobjects/ApexClass</code>.</li>
+      <li style="margin-bottom:8px;">A <code>FlowMigration__c</code> record is inserted with <code>Direction = Flow_To_Apex</code> and <code>Deploy_Status__c = Deployed</code>.</li>
+      <li style="margin-bottom:8px;">In a separate <code>@future</code> call, a <code>Trigger_Handler__mdt</code> record is created via <code>Metadata.Operations.enqueueDeployment()</code>.</li>
+      <li style="margin-bottom:8px;">On the next trigger fire for the relevant object, the CMT-based dispatcher instantiates the handler by name and calls <code>run()</code>.</li>
+    </ol>
+
+    <div class="callout success">
+      <strong>Zero manual steps</strong>
+      You do not need to edit any dispatcher class, run <code>sf deploy</code>, or create any metadata record manually.
+    </div>
+
+    <div class="callout warning">
+      <strong>Existing class detected</strong>
+      If a class with the same name already exists in the org (e.g. from a prior deploy or a previous conversion), its body is not overwritten. The CMT registration still runs so the dispatcher picks it up.
+    </div>
+
+    <h3>Auto-deploy failed</h3>
+    <p>If the badge shows <span class="badge-err">Auto-deploy failed</span>:</p>
+    <ul style="margin-left:20px; color:var(--muted);">
+      <li style="margin-bottom:6px;">The error detail is shown below the badge.</li>
+      <li style="margin-bottom:6px;">The generated handler code is still shown — copy it and deploy manually via SF CLI or Developer Console.</li>
+      <li style="margin-bottom:6px;">Then create a <code>Trigger_Handler__mdt</code> record manually (see Section 9).</li>
+    </ul>
+  </section>
+
+  <!-- ── 7 APEX TO FLOW ── -->
+  <section id="use-apex-to-flow">
+    <h2>7 — Using Apex → Flow</h2>
+
+    <h3>Step-by-step</h3>
+    <ul class="steps">
+      <li><div class="content"><p>In the converter, switch the direction toggle to <strong>Apex → Flow</strong>.</p></div></li>
+      <li><div class="content"><p>Enter the Apex class name (e.g. <code>AccountSetDefaultIndustryHandler</code>). The class must exist in the org and implement <code>IFlowMigrationHandler</code>.</p></div></li>
+      <li><div class="content"><p>Click <strong>Convert</strong>.</p></div></li>
+      <li><div class="content">
+        <p>Three possible outcomes:</p>
+        <table>
+          <thead><tr><th>Result</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge-ok">Flow XML generated</span></td><td>A <code>.flow-meta.xml</code> is ready to copy and deploy.</td></tr>
+            <tr><td><span class="badge-wrn">Not translatable</span></td><td>The handler uses a pattern Flow cannot express. A plain-English reason is shown.</td></tr>
+            <tr><td><span class="badge-err">Conversion failed</span></td><td>An unexpected error occurred (see error message).</td></tr>
+          </tbody>
+        </table>
+      </div></li>
+    </ul>
+
+    <h3>Deploying the generated Flow XML</h3>
+    <ol style="margin-left:20px; color:var(--muted);">
+      <li style="margin-bottom:8px;">Copy the XML from the result panel.</li>
+      <li style="margin-bottom:8px;">Save it as <code>&lt;FlowApiName&gt;.flow-meta.xml</code> in your SFDX project.</li>
+      <li style="margin-bottom:8px;">Deploy: <code>sf project deploy start --metadata Flow:&lt;FlowApiName&gt; --target-org &lt;alias&gt;</code></li>
+      <li style="margin-bottom:8px;">Activate the Flow in Setup → Flows if it deploys as Inactive.</li>
+    </ol>
+
+    <h3>Patterns that cannot be translated to Flow</h3>
+    <p>The converter refuses when the handler uses:</p>
+    <ul style="margin-left:20px; color:var(--muted); column-count:2; column-gap:24px;">
+      <li>try / catch blocks</li>
+      <li>@future, Queueable, Batchable</li>
+      <li>HTTP callouts</li>
+      <li>Dynamic SOQL</li>
+      <li>Recursive methods</li>
+      <li>Custom exception classes</li>
+      <li>SOSL queries</li>
+      <li>Schema describe calls</li>
+      <li>Multi-object DML in same branch</li>
+      <li>Complex string parsing / regex</li>
+      <li>Non-Id keyed Maps used as lookup tables</li>
+      <li>Mixed before-save + after-save op gates</li>
+    </ul>
+  </section>
+
+  <!-- ── 8 MIGRATION RECORDS ── -->
+  <section id="records">
+    <h2>8 — Migration Records (FlowMigration__c)</h2>
+    <p>Every conversion — success or failure — is persisted as a <code>FlowMigration__c</code> record. Click <strong>Open Migration Record</strong> in the result panel or browse the <strong>Flow Migrations</strong> tab.</p>
+
+    <ul class="field-list">
+      <li><span class="fname">Source_Flow_Name__c</span><span class="fdesc">API name of the source Flow or Apex class.</span></li>
+      <li><span class="fname">Direction__c</span><span class="fdesc"><code>Flow_To_Apex</code> or <code>Apex_To_Flow</code>.</span></li>
+      <li><span class="fname">Object_Name__c</span><span class="fdesc">SObject the handler operates on (e.g. Account).</span></li>
+      <li><span class="fname">Status__c</span><span class="fdesc"><code>New</code> → <code>Generated</code> or <code>Failed</code>.</span></li>
+      <li><span class="fname">Generated_Apex__c</span><span class="fdesc">Full Apex class body (Flow→Apex only).</span></li>
+      <li><span class="fname">Generated_Flow_XML__c</span><span class="fdesc">Full .flow-meta.xml (Apex→Flow only).</span></li>
+      <li><span class="fname">Error_Message__c</span><span class="fdesc">Stack trace on failure, or refusal reason on NotTranslatable.</span></li>
+      <li><span class="fname">Deploy_Status__c</span><span class="fdesc"><code>Deployed</code>, <code>Deploy_Failed</code>, or <code>Not_Attempted</code> (Flow→Apex only).</span></li>
+    </ul>
+  </section>
+
+  <!-- ── 9 CMT REGISTRY ── -->
+  <section id="handlers">
+    <h2>9 — Handler Registry (Trigger_Handler__mdt)</h2>
+    <p>
+      Every generated handler is registered in <code>Trigger_Handler__mdt</code> automatically.
+      You can view, disable, or reorder handlers without touching any Apex code.
+    </p>
+    <p>Setup → Custom Metadata Types → <strong>Trigger Handler</strong> → Manage Records.</p>
+
+    <ul class="field-list">
+      <li><span class="fname">Object__c</span><span class="fdesc">SObject API name the handler belongs to (e.g. <code>Account</code>).</span></li>
+      <li><span class="fname">Handler_Class__c</span><span class="fdesc">Fully-qualified Apex class name (e.g. <code>AccountSetDefaultIndustryHandler</code>).</span></li>
+      <li><span class="fname">Active__c</span><span class="fdesc">Checkbox. Uncheck to disable a handler without deleting the record.</span></li>
+      <li><span class="fname">Order__c</span><span class="fdesc">Execution order per object. Lower numbers run first. Null values run last.</span></li>
+    </ul>
+
+    <h3>How the dispatcher uses this registry</h3>
+    <pre><code>// Each dispatcher (AccountTriggerDispatcher, etc.) runs:
+List&lt;Trigger_Handler__mdt&gt; handlers = [
+    SELECT Handler_Class__c
+    FROM   Trigger_Handler__mdt
+    WHERE  Object__c  = 'Account'
+    AND    Active__c  = true
+    ORDER BY Order__c ASC NULLS LAST
+];
+for (Trigger_Handler__mdt h : handlers) {
+    IFlowMigrationHandler inst =
+        (IFlowMigrationHandler) Type.forName(h.Handler_Class__c).newInstance();
+    inst.run(Trigger.operationType, Trigger.new, Trigger.oldMap);
+}</code></pre>
+
+    <div class="callout info">
+      <strong>Supported objects</strong>
+      Dispatchers are included for Account, Contact, Lead, Opportunity, and Case. Adding a new object requires creating a new trigger + dispatcher following the same pattern.
+    </div>
+
+    <h3>Manually creating a CMT record</h3>
+    <p>If auto-deploy failed and you deployed the handler class manually:</p>
+    <ol style="margin-left:20px; color:var(--muted);">
+      <li style="margin-bottom:6px;">Setup → Custom Metadata Types → Trigger Handler → Manage Records → New.</li>
+      <li style="margin-bottom:6px;">Label: handler class name (max 40 chars). Developer Name: auto-generated or set manually.</li>
+      <li style="margin-bottom:6px;">Object: the SObject API name. Handler Class: exact class name. Active: checked. Order: any number.</li>
+      <li style="margin-bottom:6px;">Save. Active on next trigger fire.</li>
+    </ol>
+  </section>
+
+  <!-- ── 10 TROUBLESHOOTING ── -->
+  <section id="troubleshooting">
+    <h2>10 — Troubleshooting</h2>
+
+    <h3>Auto-deploy failed — insufficient access rights on cross-reference id</h3>
+    <div class="callout warning">
+      The handler class already exists and was deployed via metadata (SFDX). The Tooling API cannot PATCH metadata-deployed classes. This is expected — the class is already in the org. The CMT registration still ran (or will run). Check if the <code>Trigger_Handler__mdt</code> record was created; if not, create it manually (Section 9).
+    </div>
+
+    <h3>CMT registration failed — mixed DML</h3>
+    <div class="callout warning">
+      <code>DML operation on setup object is not permitted after you have updated a non-setup object.</code><br/>
+      This should not happen with the current code because CMT registration runs in an <code>@future</code> context. If you see it, check that you are running the latest version of <code>ApexDeployService</code>.
+    </div>
+
+    <h3>Conversion failed — Unknown error</h3>
+    <div class="callout error">
+      Open browser DevTools → Console. The LWC logs the full error object as JSON. Common causes:
+      <ul style="margin-top:8px; margin-left:16px;">
+        <li>Prompt Template not found — verify API name matches exactly (case-sensitive).</li>
+        <li>Einstein Generative AI not enabled — check Einstein Setup.</li>
+        <li>Remote Site Setting missing — add your org's My Domain URL.</li>
+        <li>FLS — running user cannot read/write FlowMigration__c fields.</li>
+      </ul>
+    </div>
+
+    <h3>Handler not firing after conversion</h3>
+    <div class="callout info">
+      <ul style="margin-left:16px;">
+        <li>Verify the <code>Trigger_Handler__mdt</code> record exists and <code>Active__c = true</code>.</li>
+        <li>The CMT record is created asynchronously (<code>@future</code>). Wait a few seconds after the "Deployed" badge appears.</li>
+        <li>Check that the correct trigger exists for the object (<code>AccountTrigger</code>, etc.).</li>
+        <li>Verify the handler class exists in the org (Setup → Apex Classes).</li>
+      </ul>
+    </div>
+
+    <h3>Flow → Apex: "Flow API name is required"</h3>
+    <div class="callout warning">
+      Enter the Flow's API Name, not its label. Find it in Setup → Flows → click the Flow → the URL contains the API name, or check the Flow's properties.
+    </div>
+
+    <h3>Apex → Flow: "does not match IFlowMigrationHandler signature"</h3>
+    <div class="callout warning">
+      The Apex → Flow converter only works on handlers that implement <code>IFlowMigrationHandler</code> with the exact <code>run(op, List&lt;SObject&gt;, Map&lt;Id,SObject&gt;)</code> signature. Standard Apex classes with other shapes are not supported.
+    </div>
+  </section>
+
+  <!-- ── 11 COMPONENT REFERENCE ── -->
+  <section id="reference">
+    <h2>11 — Component Reference</h2>
+
+    <h3>Apex Classes</h3>
+    <table>
+      <thead><tr><th>Class</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>FlowToApexService</code></td><td>Flow→Apex orchestration. <code>@AuraEnabled migrate(flowApiName)</code></td></tr>
+        <tr><td><code>ApexToFlowService</code></td><td>Apex→Flow orchestration. <code>@AuraEnabled migrate(apexClassName)</code></td></tr>
+        <tr><td><code>ApexDeployService</code></td><td>Tooling API class creation + CMT registration via <code>@future</code></td></tr>
+        <tr><td><code>FlowReaderService</code></td><td>Reads Flow JSON via Tooling API</td></tr>
+        <tr><td><code>ApexSourceReaderService</code></td><td>Reads Apex class body via Tooling API</td></tr>
+        <tr><td><code>EinsteinPromptClient</code></td><td>Generic Prompt Builder invocation wrapper</td></tr>
+        <tr><td><code>IFlowMigrationHandler</code></td><td>Interface: <code>void run(op, List&lt;SObject&gt;, Map&lt;Id,SObject&gt;)</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Triggers &amp; Dispatchers</h3>
+    <table>
+      <thead><tr><th>Object</th><th>Trigger</th><th>Dispatcher</th></tr></thead>
+      <tbody>
+        <tr><td>Account</td><td><code>AccountTrigger</code></td><td><code>AccountTriggerDispatcher</code></td></tr>
+        <tr><td>Contact</td><td><code>ContactTrigger</code></td><td><code>ContactTriggerDispatcher</code></td></tr>
+        <tr><td>Lead</td><td><code>LeadTrigger</code></td><td><code>LeadTriggerDispatcher</code></td></tr>
+        <tr><td>Opportunity</td><td><code>OpportunityTrigger</code></td><td><code>OpportunityTriggerDispatcher</code></td></tr>
+        <tr><td>Case</td><td><code>CaseTrigger</code></td><td><code>CaseTriggerDispatcher</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>LWCs</h3>
+    <table>
+      <thead><tr><th>Component</th><th>Location</th><th>Purpose</th></tr></thead>
+      <tbody>
+        <tr><td><code>flowToApexConverter</code></td><td>Lightning App / any App Page</td><td>Direction toggle, input, result renderer, deploy badge</td></tr>
+        <tr><td><code>flowMigrationCodeViewer</code></td><td>FlowMigration__c record page</td><td>Renders handler code / Flow XML / refusal reason</td></tr>
+      </tbody>
+    </table>
+
+    <h3>Prompt Templates</h3>
+    <table>
+      <thead><tr><th>API Name</th><th>Input Variable</th><th>Canonical source</th></tr></thead>
+      <tbody>
+        <tr><td><code>Flow_To_Apex_Converter</code></td><td><code>flowMetadata</code></td><td><code>docs/prompts/Flow_To_Apex_Converter.txt</code></td></tr>
+        <tr><td><code>Apex_To_Flow_Converter</code></td><td><code>apexSource</code></td><td><code>docs/prompts/Apex_To_Flow_Converter.txt</code></td></tr>
+      </tbody>
+    </table>
+
+    <h3>Handler interface</h3>
+    <pre><code>public interface IFlowMigrationHandler {
+    void run(
+        System.TriggerOperation op,
+        List&lt;SObject&gt;          records,
+        Map&lt;Id, SObject&gt;       oldMap
+    );
+}</code></pre>
+
+    <h3>Minimal handler skeleton</h3>
+    <pre><code>public with sharing class MyObjectSomethingHandler implements IFlowMigrationHandler {
+
+    public void run(System.TriggerOperation op, List&lt;SObject&gt; records, Map&lt;Id, SObject&gt; oldMap) {
+        if (op != System.TriggerOperation.BEFORE_INSERT) return;
+
+        for (SObject sObj : records) {
+            MyObject__c record = (MyObject__c) sObj;
+            // your logic here
+        }
+    }
+}</code></pre>
+  </section>
+
+  <footer style="text-align:center; color:#aaa; font-size:.8rem; margin-top:60px; padding-top:24px; border-top:1px solid var(--border);">
+    flowToApexAI — ishanovarazmyrat-code
+  </footer>
+
+</div>
+</body>
+</html>
